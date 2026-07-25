@@ -17,6 +17,7 @@ public class Program
         Kernel.Register<IFirewallManager>(() => new UfwFirewallManager());
         Kernel.Register<INetworkManager>(() => new NetworkManager());
         Kernel.Register<ISystemConfigurator>(() => new SystemConfigurator());
+        Kernel.Register<IFileManager>(() => new BaseFileManager());
 
         VpnManager.Register(() => new WireGuard());
         VpnManager.Register(() => new AmneziaWg());

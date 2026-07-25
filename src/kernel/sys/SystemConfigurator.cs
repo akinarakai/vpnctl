@@ -2,7 +2,7 @@ using System.Text;
 
 public class SystemConfigurator : ISystemConfigurator
 {
-    private readonly string _path = "/etc/sysctl.d/vpnctl.conf";
+    private readonly string _path = "/etc/sysctl.d/99-vpnctl.conf";
 
     public void ApplySystemOptimizations()
     {
@@ -20,33 +20,26 @@ public class SystemConfigurator : ISystemConfigurator
         sb.AppendLine($"net.ipv4.tcp_congestion_control={config.CongestionControl}");
         sb.AppendLine($"net.ipv4.tcp_syncookies={(config.DisableIcmpEchoIgnoreAll ? 1 : 0)}");
 
-        FileHelper.TrySaveFile(_path, sb.ToString());
-
-        var result = Kernel.Cmd.Run("sysctl", "--system", true);
-        if (!result.Success)
+        if (Kernel.File.TrySaveFile(_path, sb.ToString()))
         {
-            throw new Exception($"Failed applying sys config: {result.Text.Trim()}");
-        }
+            var result = Kernel.Cmd.Run("sysctl", "--system", true, false);
+            if (!result.Success)
+            {
+                throw new Exception($"Failed applying sys config: {result.Text.Trim()}");
+            }
 
-        Logger.Success("System config applied successfully.");
+            Logger.Success("System config applied successfully.");
+        }
     }
 
     public void DeleteSystemConfig()
     {
-        if (File.Exists(_path))
-        {
-            File.Delete(_path);
-            Logger.Info($"File {_path} deleted.");
-        }
-        else
-        {
-            Logger.Warn($"File {_path} not found, skipping delete.");
-        }
+        Kernel.File.Delete(_path);
 
         Kernel.Cmd.Run("sysctl", "-w net.ipv4.ip_forward=0", true);
         Kernel.Cmd.Run("sysctl", "-w net.ipv6.conf.all.forwarding=0", true);
 
-        var result = Kernel.Cmd.Run("sysctl", "--system", true);
+        var result = Kernel.Cmd.Run("sysctl", "--system", true, false);
         if (!result.Success)
         {
             throw new Exception($"Failed to reload sysctl after rollback: {result.Text.Trim()}");

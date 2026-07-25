@@ -30,4 +30,5 @@ public interface IVpnService
     VpnActiveStatus GetActiveStatus();
 
     string GetInfo();
+    List<ClientOnlineStats> GetOnlineStats();
 }

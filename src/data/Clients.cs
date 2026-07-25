@@ -9,6 +9,7 @@ public abstract class VpnClientBase
 {
     public string Name { get; init; } = string.Empty;
     public string ConfigStr { get; init; } = string.Empty;
+    public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 }
 

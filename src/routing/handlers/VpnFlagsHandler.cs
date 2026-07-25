@@ -34,10 +34,12 @@ public class VpnFlagsHandler : IHandler
                     var updateResult = Kernel.Cmd.Run("apt-get", "update -y", true, false);
                     if (!updateResult.Success)
                     {
-                        Logger.Warn("System update completed with warnings.");
+                        Logger.Warn($"System update completed with warnings. {updateResult.Text.Trim()}");
                     }
 
                     Logger.Info($"Start installing {name}...");
+
+                    Kernel.Data.GetServerState().NetworkInterface = Kernel.Network.GetActiveInterface();
 
                     var isForce = input.HasFlag<ForceFlag>();
                     if (vpn.Install(isForce))

@@ -190,6 +190,13 @@ public class WireGuard : IVpnService
         return string.Empty;
     }
 
+    public List<ClientOnlineStats> GetOnlineStats()
+    {
+        var result = new List<ClientOnlineStats>();
+
+        return result;
+    }
+
     public VpnInstallStatus GetInstallStatus()
     {
         var cmd = Kernel.Cmd;
@@ -216,7 +223,7 @@ public class WireGuard : IVpnService
         var fullConfig = FormatManager.GetWgServerConfString(server, clients);
         var path = Path.Combine(_basePath, $"{server.Wg.InterfaceName}.conf");
 
-        FileHelper.TrySaveFile(path, fullConfig);
+        Kernel.File.TrySaveFile(path, fullConfig);
     }
 
     private string GetPrivateKey()

@@ -14,9 +14,13 @@ public static class XrayConfigBuilder
 
         var sIds = new List<string>();
 
-        if (clientsData != null)
+        if (clientsData?.Clients != null)
         {
-            foreach (var client in clientsData.Clients.OfType<VlessClient>())
+            var activeVlessClients = clientsData.Clients
+                .OfType<VlessClient>()
+                .Where(c => c.IsActive);
+
+            foreach (var client in activeVlessClients)
             {
                 clients.Add(new { id = client.Uuid, flow = actualFlow });
 
@@ -81,9 +85,13 @@ public static class XrayConfigBuilder
     {
         var users = new List<object>();
 
-        if (clientsData.Clients != null)
+        if (clientsData?.Clients != null)
         {
-            foreach (var client in clientsData.Clients.OfType<SocksClient>())
+            var activeSocksClients = clientsData.Clients
+                .OfType<SocksClient>()
+                .Where(c => c.IsActive);
+
+            foreach (var client in activeSocksClients)
             {
                 users.Add(new
                 {
@@ -112,9 +120,13 @@ public static class XrayConfigBuilder
     {
         var clients = new List<object>();
 
-        if (clientsData.Clients != null)
+        if (clientsData?.Clients != null)
         {
-            foreach (var client in clientsData.Clients.OfType<ShadowsocksClient>())
+            var activeSsClients = clientsData.Clients
+                .OfType<ShadowsocksClient>()
+                .Where(c => c.IsActive);
+
+            foreach (var client in activeSsClients)
             {
                 clients.Add(new
                 {

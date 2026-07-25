@@ -70,27 +70,18 @@ public class XrayData
 
 public class ClientsData
 {
+    public long LastClientId { get; set; } = 1;
     public List<VpnClientBase> Clients { get; set; } = new();
 }
 
 public class ServerData
 {
-    public string ServerIpFallback { get; init; } = string.Empty;
-    public string NetworkInterface { get; init; } = "eth0";
+    public string ServerIpFallback { get; set; } = string.Empty;
+    public string NetworkInterface { get; set; } = "eth0";
 
-    public SysctlConfig SysctlConfig { get; init; } = new();
+    public SysctlConfig SysctlConfig { get; set; } = new();
 
     public WireGuardData Wg { get; set; } = new();
-    public AmneziaWgData Awg { get; init; } = new();
+    public AmneziaWgData Awg { get; set; } = new();
     public XrayData Xray { get; set; } = new();
-}
-
-public interface IDataProvider
-{
-    ClientsData GetClientsState();
-    ServerData GetServerState();
-    void TrySave();
-
-    VpnClientBase? GetClient(string name);
-    bool IsNameExist(string name);
 }

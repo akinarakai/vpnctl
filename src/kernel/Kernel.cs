@@ -7,6 +7,7 @@ public static class Kernel
     public static INetworkManager Network => _registry.Get<INetworkManager>();
     public static IFirewallManager Firewall => _registry.Get<IFirewallManager>();
     public static ISystemConfigurator SysConfig => _registry.Get<ISystemConfigurator>();
+    public static IFileManager File => _registry.Get<IFileManager>();
 
     public static void Register<TInterface>(Func<TInterface> factory) where TInterface : class
     {

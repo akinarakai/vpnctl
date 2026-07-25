@@ -1,11 +1,26 @@
+public enum ConfigDisplayMode
+{
+    None,
+    Cfg,
+    Qr
+}
+
 public class ClientsShowHandler : IHandler
 {
     public bool CanHandle(InputContext input)
     {
-        // client name/list (flag=qr)
-        if (input.Count > 3) return false;
+        // client name / client list (flag=qr)
+        if (input.Count == 0 || input.Args[0] != "client" || input.Count > 3)
+            return false;
 
-        return input.Args[0] == "client";
+        if (input.Count >= 2)
+        {
+            var secondWord = input.Args[1];
+            if (secondWord == "del" || secondWord == "up" || secondWord == "down" || secondWord == "add")
+                return false;
+        }
+
+        return true;
     }
 
     public void Handle(InputContext input)
@@ -20,7 +35,16 @@ public class ClientsShowHandler : IHandler
         }
 
         var isSingle = input.Args[1] != "list";
-        var useQr = input.HasFlag<QrFlag>();
+
+        var displayMode = ConfigDisplayMode.None;
+        if (input.HasFlag<QrFlag>())
+        {
+            displayMode = ConfigDisplayMode.Qr;
+        }
+        else if (input.HasFlag<CfgFlag>())
+        {
+            displayMode = ConfigDisplayMode.Cfg;
+        }
 
         if (isSingle)
         {
@@ -33,61 +57,120 @@ public class ClientsShowHandler : IHandler
                 return;
             }
 
-            PrintConfig(client, useQr);
+            var stats = GetStatsForClient(client);
+            PrintConfig(client, stats, displayMode);
         }
         else
         {
             for (int i = 0; i < clients.Count; i++)
             {
                 var client = clients[i];
-                PrintConfig(client, useQr, i + 1);
+
+                var stats = GetStatsForClient(client);
+                PrintConfig(client, stats, displayMode, i + 1);
             }
         }
     }
 
-    private void PrintConfig(VpnClientBase client, bool useQr, int? iter = null)
+    private void PrintConfig(VpnClientBase client, ClientOnlineStats? stats, ConfigDisplayMode displayMode, int? iter = null)
     {
-        var providerStr = "Unknown";
+        var providerStr = client switch
+        {
+            WireGuardClient => "WireGuard",
+            AmneziaWgClient => "AmneziaWG",
+            VlessClient => "VLESS",
+            SocksClient => "SOCKS",
+            ShadowsocksClient => "Shadowsocks",
+            _ => "Unknown"
+        };
+
+        var activeStr = client.IsActive ? "● ENABLED" : "○ BLOCKED";
+
         var dateStr = client.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy");
-
-        if (client is WireGuardClient)
-        {
-            providerStr = "WireGuard";
-        }
-        else if (client is AmneziaWgClient)
-        {
-            providerStr = "AmneziaWG";
-        }
-        else if (client is VlessClient)
-        {
-            providerStr = "VLESS";
-        }
-        else if (client is SocksClient)
-        {
-            providerStr = "SOCKS";
-        }
-        else if (client is ShadowsocksClient)
-        {
-            providerStr = "Shadowsocks";
-        }
-
         var interStr = iter != null ? $"{iter}. " : "";
-        Console.WriteLine($"{interStr}{client.Name} | {providerStr} | {dateStr}");
 
-        if (!string.IsNullOrEmpty(client.ConfigStr))
+        var networkStatusStr = "○ OFFLINE";
+        if (stats != null && stats.LastConnectAt.HasValue)
         {
-            Console.WriteLine($"--- CONFIG ---");
-            if (useQr)
+            var timeSinceLastConnect = DateTime.UtcNow - stats.LastConnectAt.Value;
+            if (timeSinceLastConnect.TotalMinutes <= 3)
             {
+                networkStatusStr = "● ONLINE";
+            }
+        }
+
+        Console.WriteLine($"{interStr}{client.Name} | {providerStr} | {activeStr} | {networkStatusStr} | Created: {dateStr}");
+
+        if (stats != null)
+        {
+            var lastConnectStr = stats.LastConnectAt.HasValue
+                ? stats.LastConnectAt.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")
+                : "Never";
+
+            var endpointStr = string.IsNullOrEmpty(stats.Endpoint) ? "None" : stats.Endpoint;
+
+            var (downStr, upStr) = FormatManager.FormatTraffic(stats.BytesRecived, stats.BytesSent);
+
+            Console.WriteLine($"  -> Endpoint: {endpointStr}");
+            Console.WriteLine($"  -> Last Activity: {lastConnectStr}");
+            Console.WriteLine($"  -> Traffic: Download: {downStr} | Upload: {upStr}");
+        }
+        else if (client is WireGuardClient || client is AmneziaWgClient)
+        {
+            Console.WriteLine("  -> Statistics: No data available (Offline)");
+        }
+
+        if (displayMode != ConfigDisplayMode.None && !string.IsNullOrEmpty(client.ConfigStr))
+        {
+            if (displayMode == ConfigDisplayMode.Qr)
+            {
+                Console.WriteLine("  -- QR CODE --");
                 QRCode.Render(client.ConfigStr);
             }
-            else
+            else if (displayMode == ConfigDisplayMode.Cfg)
             {
+                Console.WriteLine("  -- CONFIGURATION --");
                 Console.WriteLine(client.ConfigStr);
             }
-
-            Console.WriteLine("-------------------------------------");
-            Console.WriteLine();
         }
+
+        Console.WriteLine("--------------------------------------------------");
+        Console.WriteLine();
+    }
+
+    private ClientOnlineStats? GetStatsForClient(VpnClientBase client)
+    {
+        try
+        {
+            if (client is AmneziaWgClient awgClient)
+            {
+                var awg = VpnManager.GetType<AmneziaWg>();
+
+                var allAwgStats = awg.GetOnlineStats();
+                return allAwgStats.FirstOrDefault(s => s.ClientId == awgClient.PublicKey);
+            }
+
+            if (client is WireGuardClient wgClient)
+            {
+                var wg = VpnManager.GetType<WireGuard>();
+
+                var allWgStats = wg.GetOnlineStats();
+                return allWgStats.FirstOrDefault(s => s.ClientId == wgClient.PublicKey);
+            }
+
+            if (client is VlessClient vlessClient)
+            {
+                var xray = VpnManager.GetType<Xray>();
+
+                var allXrayStats = xray.GetOnlineStats();
+                return allXrayStats.FirstOrDefault(s => s.ClientId.Equals(vlessClient.Name, StringComparison.OrdinalIgnoreCase));
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"Failed to fetch online stats for client {client.Name}: {ex.Message}");
+        }
+
+        return null;
     }
 }

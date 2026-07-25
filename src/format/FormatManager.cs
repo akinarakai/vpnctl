@@ -19,12 +19,14 @@ public static class FormatManager
         sb.AppendLine($"PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o {serverData.NetworkInterface} -j MASQUERADE");
         sb.AppendLine();
 
-        if (clientsData.Clients != null)
+        if (clientsData?.Clients != null)
         {
-            foreach (var client in clientsData.Clients)
-            {
-                if (client is not WireGuardClient wg) continue;
+            var activeWgClients = clientsData.Clients
+                .OfType<WireGuardClient>()
+                .Where(c => c.IsActive);
 
+            foreach (var wg in activeWgClients)
+            {
                 sb.AppendLine("[Peer]");
                 sb.AppendLine($"PublicKey = {wg.PublicKey}");
                 sb.AppendLine($"AllowedIPs = {wg.AllowedIp}/32");
@@ -85,7 +87,11 @@ PersistentKeepalive = 20
 
         if (clientsData?.Clients != null)
         {
-            foreach (var client in clientsData.Clients.OfType<AmneziaWgClient>())
+            var activeAwgClients = clientsData.Clients
+                .OfType<AmneziaWgClient>()
+                .Where(c => c.IsActive);
+
+            foreach (var client in activeAwgClients)
             {
                 sb.AppendLine("[Peer]");
                 sb.AppendLine($"PublicKey = {client.PublicKey}");
@@ -262,5 +268,27 @@ PersistentKeepalive = 20
         }
 
         return (publicKey, privateKey);
+    }
+
+    public static (string down, string up) FormatTraffic(long bytesReceived, long bytesSent)
+    {
+        string FormatBytes(long bytes)
+        {
+            string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
+            int counter = 0;
+            double number = bytes;
+
+            while (Math.Round(number / 1024) >= 1 && counter < suffixes.Length - 1)
+            {
+                number /= 1024;
+                counter++;
+            }
+
+            return counter == 0
+                ? $"{bytes} B"
+                : $"{number:F2} {suffixes[counter]}";
+        }
+
+        return (FormatBytes(bytesReceived), FormatBytes(bytesSent));
     }
 }

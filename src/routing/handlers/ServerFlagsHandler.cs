@@ -37,25 +37,30 @@ public class ServerFlagsHandler : IHandler
             }
             else if (flag.Value is PurgeFlag)
             {
-                HandlePurge();
+                var force = input.HasFlag<ForceFlag>();
+                
+                HandlePurge(force);
                 Console.WriteLine();
             }
         }
     }
 
-    private void HandlePurge()
+    private void HandlePurge(bool force)
     {
-        Logger.Warn("ВНИМАНИЕ! Эта команда полностью удалит все VPN-сервисы, сбросит правила файрвола и вернет настройки Linux по умолчанию.");
-        Console.Write("Вы уверены, что хотите продолжить? [y/N]: ");
-
-        string? response = Console.ReadLine()?.Trim().ToLower();
-        if (response != "y" && response != "yes")
+        if (!force)
         {
-            Logger.Info("Операция полной очистки отменена пользователем.");
-            return;
+            Logger.Warn("WARNING! This command will completely remove all VPN services, reset firewall rules, and revert Linux system settings to defaults.");
+            Console.Write("Are you sure you want to continue? [y/N]: ");
+
+            string? response = Console.ReadLine()?.Trim().ToLower();
+            if (response != "y" && response != "yes")
+            {
+                Logger.Info("Purge operation cancelled by user.");
+                return;
+            }
         }
 
-        Logger.Info("Остановка и удаление VPN-сервисов...");
+        Logger.Info("Stopping and removing VPN services...");
 
         var vpns = VpnManager.GetAll();
         foreach (var vpn in vpns)
@@ -65,52 +70,50 @@ public class ServerFlagsHandler : IHandler
             {
                 try
                 {
-                    Logger.Info($"Остановка и очистка {name}...");
+                    Logger.Info($"Stopping and purging {name}...");
                     vpn.Uninstall();
                 }
                 catch (Exception ex)
                 {
-                    Logger.Error($"Ошибка при удалении {name}: {ex.Message}");
+                    Logger.Error($"Failed to uninstall {name}: {ex.Message}");
                 }
             }
         }
 
-        // 2. Очистка правил файрвола
+        // Firewall
         try
         {
-            Logger.Info("Очистка правил файрвола...");
-            // Сюда встанет твой метод сброса NAT правил из UfwFirewallManager
+            //Logger.Info("Clearing firewall rules...");
             // Kernel.Firewall.RemoveAllVpnRules();
         }
         catch (Exception ex)
         {
-            Logger.Error($"Ошибка при сбросе файрвола: {ex.Message}");
+            Logger.Error($"Failed to reset firewall: {ex.Message}");
         }
 
-        // 3. Откат оптимизаций ядра Linux (удаление vpnctl.conf и сброс sysctl в 0)
+        // Sys config
         try
         {
-            Logger.Info("Откат системных оптимизаций sysctl...");
+            Logger.Info("Reverting sysctl system optimizations...");
             Kernel.SysConfig.DeleteSystemConfig();
         }
         catch (Exception ex)
         {
-            Logger.Error($"Ошибка при удалении системного конфига: {ex.Message}");
+            Logger.Error($"Failed to delete system configuration: {ex.Message}");
         }
 
-        // 4. Полное удаление файлов базы данных JSON с диска
+        // Storage
         try
         {
-            Logger.Info("Удаление конфигурационных файлов приложения...");
-            // Сюда встанет метод физического удаления файлов JSON из JsonDataProvider
-            // Kernel.Data.DeleteStorageFiles();
+            Logger.Info("Deleting application configuration files...");
+            Kernel.Data.DeleteFiles();
         }
         catch (Exception ex)
         {
-            Logger.Error($"Ошибка при очистке файлов данных: {ex.Message}");
+            Logger.Error($"Failed to clear data files: {ex.Message}");
         }
 
-        Logger.Success("Система полностью очищена от всех следов vpnctl!");
+        Logger.Success("System successfully cleared of all vpnctl traces!");
     }
 
     private void HandleInit()
@@ -123,6 +126,8 @@ public class ServerFlagsHandler : IHandler
         var clients = data.GetClientsState();
 
         Kernel.SysConfig.ApplySystemOptimizations();
+
+        data.GetServerState().NetworkInterface = Kernel.Network.GetActiveInterface();
 
         Logger.Success($"System initialized successfully.");
     }

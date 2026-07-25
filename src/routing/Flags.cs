@@ -102,6 +102,13 @@ public class QrFlag : IInputFlag
     public string Description => "Generate and render a terminal-friendly QR code for client profiles";
 }
 
+public class CfgFlag : IInputFlag
+{
+    public string Name => "cfg";
+    public int ArgumentCount => 0;
+    public string Description => "Generate and render a terminal-friendly QR code for client profiles";
+}
+
 public class PasswordFlag : IInputFlag
 {
     public string Name => "pwd";
@@ -168,4 +175,11 @@ public class PurgeFlag : IInputFlag
     public string Name => "purge";
     public int ArgumentCount => 0;
     public string Description => "Delete";
+}
+
+public class NameFlag : IInputFlag
+{
+    public string Name => "name";
+    public int ArgumentCount => 1;
+    public string Description => "Name";
 }

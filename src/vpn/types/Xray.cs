@@ -243,6 +243,13 @@ public class Xray : IVpnService
         return string.Empty;
     }
 
+    public List<ClientOnlineStats> GetOnlineStats()
+    {
+        var result = new List<ClientOnlineStats>();
+
+        return result;
+    }
+
     public VpnInstallStatus GetInstallStatus()
     {
         var cmd = Kernel.Cmd;
@@ -277,7 +284,7 @@ public class Xray : IVpnService
         var fullConfig = FormatManager.GetXrayServerConfig(server, clients);
         var path = Path.Combine(_basePath, "config.json");
 
-        FileHelper.TrySaveFile(path, fullConfig);
+        Kernel.File.TrySaveFile(path, fullConfig);
     }
 }
 

@@ -28,7 +28,7 @@ public class JsonDataProvider : IDataProvider
             {
                 var json = File.ReadAllText(_serverPath);
                 _cachedServer = JsonSerializer.Deserialize<ServerData>(json, _jsonOptions) ?? new ServerData();
-                _initialServerHash = HashHelper.CalculateHash(json);
+                _initialServerHash = Kernel.File.CalculateHash(json);
             }
             else
             {
@@ -54,7 +54,7 @@ public class JsonDataProvider : IDataProvider
             {
                 var json = File.ReadAllText(_clientsPath);
                 _cachedClients = JsonSerializer.Deserialize<ClientsData>(json, _jsonOptions) ?? new ClientsData();
-                _initialClientsHash = HashHelper.CalculateHash(json);
+                _initialClientsHash = Kernel.File.CalculateHash(json);
             }
             else
             {
@@ -77,7 +77,7 @@ public class JsonDataProvider : IDataProvider
             if (_cachedServer != null)
             {
                 var serverJson = JsonSerializer.Serialize(_cachedServer, _jsonOptions);
-                var currentServerHash = HashHelper.CalculateHash(serverJson);
+                var currentServerHash = Kernel.File.CalculateHash(serverJson);
 
                 if (currentServerHash != _initialServerHash)
                 {
@@ -90,7 +90,7 @@ public class JsonDataProvider : IDataProvider
             if (_cachedClients != null)
             {
                 var clientsJson = JsonSerializer.Serialize(_cachedClients, _jsonOptions);
-                var currentClientsHash = HashHelper.CalculateHash(clientsJson);
+                var currentClientsHash = Kernel.File.CalculateHash(clientsJson);
 
                 if (currentClientsHash != _initialClientsHash)
                 {
@@ -104,6 +104,13 @@ public class JsonDataProvider : IDataProvider
         {
             throw new Exception($"Failed to save data state: {ex.Message}");
         }
+    }
+
+    public void DeleteFiles()
+    {
+        Kernel.File.Delete(_serverPath, _clientsPath);
+        _cachedClients = null;
+        _cachedServer = null;
     }
 
     public VpnClientBase? GetClient(string name)

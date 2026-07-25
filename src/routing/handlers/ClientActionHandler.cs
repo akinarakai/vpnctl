@@ -7,10 +7,11 @@ public class ClientActionHandler : IHandler
 
     public bool CanHandle(InputContext input)
     {
-        // proto client add name // 4 args
+        // proto client add // 3 args
         // client del name // 3 args
+        // client up/down name // 3 args
 
-        var isCreate = input.Count >= 4 &&
+        var isCreate = input.Count >= 3 &&
                     input.Args[1] == "client" &&
                     input.Args[2] == "add";
 
@@ -18,37 +19,102 @@ public class ClientActionHandler : IHandler
                         input.Args[0] == "client" &&
                         input.Args[1] == "del";
 
-        return isCreate || isDelete;
+        var isUpDown = input.Count >= 3 &&
+                        input.Args[0] == "client" &&
+                        (input.Args[1] == "up" || input.Args[1] == "down");
+
+        return isCreate || isDelete || isUpDown;
     }
 
     public void Handle(InputContext input)
     {
         var data = Kernel.Data;
+        string action = string.Empty;
 
-        var action = input.Args[2];
-        var clients = data.GetClientsState();
-
-        if (action == "add")
+        if (input.Args[0] == "client")
         {
-            HandleCreate(input, clients);
+            action = input.Args[1];
         }
         else
         {
-            HandleDelete(input, clients);
+            action = input.Args[2];
+        }
+
+        if (action == "add")
+        {
+            HandleCreate(input, data);
+        }
+        else if (action == "del")
+        {
+            HandleDelete(input, data);
+        }
+        else if (action == "up" || action == "down")
+        {
+            HandleActive(input, data, action);
         }
     }
 
-    private void HandleCreate(InputContext input, ClientsData clientsData)
+    private void HandleActive(InputContext input, IDataProvider data, string action)
     {
-        var clientName = input.Args[3];
+        var clientsState = data.GetClientsState();
+        var clientName = input.Args[2];
 
-        if (ReservedNames.Contains(clientName))
+        var client = clientsState.Clients.FirstOrDefault(c => c.Name == clientName);
+        if (client == null)
         {
-            Logger.Warn($"Failed to create client: '{clientName}' is a reserved command keyword.");
+            Logger.Warn($"Failed found client with name {clientName}");
             return;
         }
 
-        var data = Kernel.Data;
+        client.IsActive = action == "up";
+
+        if (client is WireGuardClient)
+        {
+            var wg = VpnManager.GetType<WireGuard>();
+            wg.Restart();
+
+            Logger.Success($"WireGuard client \"{clientName}\" {action}.");
+        }
+        else if (client is AmneziaWgClient)
+        {
+            var awg = VpnManager.GetType<AmneziaWg>();
+            awg.Restart();
+
+            Logger.Success($"AmneziaWG client \"{clientName}\" {action}.");
+        }
+        else if (client is VlessClient || client is SocksClient || client is ShadowsocksClient)
+        {
+            var xray = VpnManager.GetType<Xray>();
+            xray.Restart();
+
+            Logger.Success($"Xray client \"{clientName}\" {action}.");
+        }
+        else
+        {
+            var unknownType = client.GetType().Name;
+            Logger.Warn($"Client \"{clientName}\" was {action}, but its service type \"{unknownType}\" is unhandled.");
+        }
+    }
+
+    private void HandleCreate(InputContext input, IDataProvider data)
+    {
+        string clientName = string.Empty;
+        var clientsState = data.GetClientsState();
+
+        if (input.TryGetFlag<NameFlag>(out var nameFlag) && nameFlag?.Arguments?.Count > 0)
+        {
+            clientName = nameFlag.Arguments[0];
+
+            if (ReservedNames.Contains(clientName))
+            {
+                Logger.Warn($"Failed to create client: '{clientName}' is a reserved command keyword.");
+                return;
+            }
+        }
+        else
+        {
+            clientName = $"client_{clientsState.LastClientId}";
+        }
 
         if (data.IsNameExist(clientName))
         {
@@ -64,14 +130,12 @@ public class ClientActionHandler : IHandler
         {
             var wg = VpnManager.GetType<WireGuard>();
             client = wg.CreateClient(clientName);
-
             vpn = wg;
         }
         else if (protoName == "awg")
         {
             var awg = VpnManager.GetType<AmneziaWg>();
             client = awg.CreateClient(clientName);
-
             vpn = awg;
         }
         else if (protoName == "vless" || protoName == "socks" || protoName == "ss")
@@ -96,7 +160,9 @@ public class ClientActionHandler : IHandler
                     client = xray.CreateSocksClient(clientName, password);
                 }
                 else if (proto == XrayProtoType.SS)
+                {
                     client = xray.CreateSsClient(clientName);
+                }
 
                 vpn = xray;
             }
@@ -104,10 +170,11 @@ public class ClientActionHandler : IHandler
 
         if (client != null)
         {
-            clientsData.Clients.Add(client);
+            clientsState.Clients.Add(client);
+            clientsState.LastClientId++;
             vpn?.Restart();
 
-            Logger.Text("--- CONFIG ---");
+            Logger.Text($"--- CONFIG FOR {clientName} ---");
             Logger.Text(client.ConfigStr);
             QRCode.Render(client.ConfigStr);
             Logger.Text("-------------------------------------");
@@ -118,17 +185,19 @@ public class ClientActionHandler : IHandler
         }
     }
 
-    private void HandleDelete(InputContext input, ClientsData clientsData)
+    private void HandleDelete(InputContext input, IDataProvider data)
     {
+        var clientsState = data.GetClientsState();
         var clientName = input.Args[2];
-        var clientToDelete = clientsData.Clients.FirstOrDefault(c => c.Name == clientName);
+
+        var clientToDelete = clientsState.Clients.FirstOrDefault(c => c.Name == clientName);
         if (clientToDelete == null)
         {
             Logger.Warn($"Failed delete: name {clientName} not exist!");
             return;
         }
 
-        clientsData.Clients.Remove(clientToDelete);
+        clientsState.Clients.Remove(clientToDelete);
 
         if (clientToDelete is WireGuardClient)
         {
