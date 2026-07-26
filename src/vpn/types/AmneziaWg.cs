@@ -125,6 +125,14 @@ public class AmneziaWg : IVpnService
         return string.Empty;
     }
 
+    public string GetLogs(int lines)
+    {
+        var awg = Kernel.Data.GetServerState().Awg;
+
+        var result = Kernel.Cmd.Run("journalctl", $"-u wg-quick@{awg.InterfaceName} -n {lines} --no-pager", true, false);
+        return result.Text.Trim();
+    }
+
     public List<ClientOnlineStats> GetOnlineStats()
     {
         if (_cachedStats != null) return _cachedStats;

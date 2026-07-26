@@ -39,20 +39,21 @@ public class BaseFileManager : IFileManager
 
     public bool IsContentChanged(string path, string currentContent)
     {
-        if (!File.Exists(path))
-        {
-            return true;
-        }
+        if (!Exists(path)) return true;
 
-        var driveData = File.ReadAllText(path);
-        var driveHash = CalculateHash(driveData);
+        var readResult = Kernel.Cmd.Run("sudo", $"cat {path}", true, false);
+        if (!readResult.Success) return true;
 
+        var driveHash = CalculateHash(readResult.Text);
         var currentHash = CalculateHash(currentContent);
+        
         return driveHash != currentHash;
     }
 
     public string CalculateHash(string content)
     {
+        if (string.IsNullOrEmpty(content)) return string.Empty;
+        
         content = content.Replace("\r\n", "\n");
 
         var dataBytes = Encoding.UTF8.GetBytes(content);

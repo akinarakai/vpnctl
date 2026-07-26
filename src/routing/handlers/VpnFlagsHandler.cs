@@ -8,6 +8,7 @@ public class VpnFlagsHandler : IHandler
         input.HasFlag<RestartFlag>() ||
         input.HasFlag<ShowFlag>() ||
         input.HasFlag<UpFlag>() ||
+        input.HasFlag<LogsFlag>() ||
         input.HasFlag<DownFlag>());
     }
 
@@ -46,7 +47,7 @@ public class VpnFlagsHandler : IHandler
                     {
                         Kernel.SysConfig.ApplySystemOptimizations();
                         vpn.Restart();
-                        
+
                         Logger.Success($"{name} successfully installed!");
                     }
                     else Logger.Error($"Failed to install {name}.");
@@ -115,6 +116,30 @@ public class VpnFlagsHandler : IHandler
                             Logger.Success($"{name} is now down.");
                         }
                         else Logger.Error($"Failed to bring down {name}.");
+                    }
+                }
+            }
+            else if (flag.Value is LogsFlag)
+            {
+                if (CanContinue(vpn, VpnInstallStatus.NOT_INSTALLED, name, "cannon get logs"))
+                {
+                    int? logLines = null;
+                    if (input.TryGetFlag<LinesFlag>(out var linesFlag) && linesFlag?.Arguments?.Count > 0)
+                    {
+                        if (int.TryParse(linesFlag.Arguments[0], out int parsedLines) && parsedLines > 0)
+                        {
+                            logLines = parsedLines;
+                        }
+                    }
+
+                    logLines = logLines != null ? logLines : 10;
+
+                    var logs = vpn.GetLogs(logLines.Value);
+
+                    var lines = logs.Split('\n');
+                    foreach (var line in lines)
+                    {
+                        Console.WriteLine($"{line}");
                     }
                 }
             }

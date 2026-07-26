@@ -243,6 +243,12 @@ public class Xray : IVpnService
         return string.Empty;
     }
 
+    public string GetLogs(int lines)
+    {
+        var result = Kernel.Cmd.Run("journalctl", $"-u xray-n {lines} --no-pager", true, false);
+        return result.Text.Trim();
+    }
+
     public List<ClientOnlineStats> GetOnlineStats()
     {
         var result = new List<ClientOnlineStats>();

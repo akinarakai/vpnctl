@@ -194,6 +194,14 @@ public class WireGuard : IVpnService
         return string.Empty;
     }
 
+    public string GetLogs(int lines)
+    {
+        var wg = Kernel.Data.GetServerState().Wg;
+
+        var result = Kernel.Cmd.Run("journalctl", $"-u wg-quick@{wg.InterfaceName} -n {lines} --no-pager", true, false);
+        return result.Text.Trim();
+    }
+
     public List<ClientOnlineStats> GetOnlineStats()
     {
         if (_cachedStats != null) return _cachedStats;

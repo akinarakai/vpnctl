@@ -171,6 +171,14 @@ public class RandomPortFlag : IInputFlag
     public string Description => "Randomize the server binding port using non-privileged dynamic ranges";
 }
 
+public class LinesFlag : IInputFlag
+{
+    public string Name => "lines";
+    public string? ShortName => "n";
+    public int ArgumentCount => 1;
+    public string Description => "Lines";
+}
+
 public class PurgeFlag : IInputFlag
 {
     public string Name => "purge";

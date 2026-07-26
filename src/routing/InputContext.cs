@@ -33,6 +33,11 @@ public class InputContext
         return _flags.Any(s => s.Value is T);
     }
 
+    public bool HasArgs(params string[] args)
+    {
+        return args.Any(a => Args.Contains(a));
+    }
+
     public bool TryGetFlag<T>(out ParsedFlag? flag) where T : IInputFlag
     {
         flag = _flags.FirstOrDefault(s => s.Value is T);

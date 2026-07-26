@@ -30,5 +30,6 @@ public interface IVpnService
     VpnActiveStatus GetActiveStatus();
 
     string GetInfo();
+    string GetLogs(int lines = 30);
     List<ClientOnlineStats> GetOnlineStats();
 }

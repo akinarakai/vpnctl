@@ -6,9 +6,9 @@ public class XrayFlagsHandler : IHandler
 
         var isReality = input.Args[0] == "reality" && (input.HasFlag<KeysFlag>());
         var isVless = input.Args[0] == "vless" && (input.HasFlag<UuidFlag>() || input.HasFlag<SecurityFlag>() || input.HasFlag<SniFlag>() || input.HasFlag<FingerprintFlag>());
-        var isXray = input.Args[0] == "xray" && (input.HasFlag<LogsFlag>());
+        //var isXray = input.Args[0] == "xray" && (input.HasFlag<LogsFlag>());
 
-        return isReality || isVless || isXray;
+        return isReality || isVless;
     }
 
     public void Handle(InputContext input)
@@ -25,6 +25,7 @@ public class XrayFlagsHandler : IHandler
         bool needRestart = false;
         foreach (var flag in input.Flags)
         {
+            /*
             if (proto == "xray")
             {
                 if (flag.Value is LogsFlag)
@@ -38,7 +39,8 @@ public class XrayFlagsHandler : IHandler
                     Logger.Text(result.Text.Trim());
                 }
             }
-            else if (proto == "reality")
+            */
+            if (proto == "reality")
             {
                 if (flag.Value is KeysFlag)
                 {

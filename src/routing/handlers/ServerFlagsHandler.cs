@@ -9,10 +9,13 @@ public class ServerFlagsHandler : IHandler
 
     public bool CanHandle(InputContext input)
     {
+        if (input.HasArgs("wg", "vless", "xray", "awg")) return false;
+
         return input.Count > 0 &&
         (input.HasFlag<InitFlag>() ||
         input.HasFlag<HelpFlag>() ||
         input.HasFlag<PurgeFlag>() ||
+        input.HasFlag<LogsFlag>() ||
         input.HasFlag<StatusFlag>());
     }
 
@@ -23,26 +26,83 @@ public class ServerFlagsHandler : IHandler
             if (flag.Value is InitFlag)
             {
                 HandleInit();
-                Console.WriteLine();
             }
             else if (flag.Value is HelpFlag)
             {
                 HandleHelp();
-                Console.WriteLine();
             }
             else if (flag.Value is StatusFlag)
             {
                 HandleStatus();
-                Console.WriteLine();
+            }
+            else if (flag.Value is LogsFlag)
+            {
+                int? lines = null;
+                if (input.TryGetFlag<LinesFlag>(out var linesFlag) && linesFlag?.Arguments?.Count > 0)
+                {
+                    if (int.TryParse(linesFlag.Arguments[0], out int parsedLines) && parsedLines > 0)
+                    {
+                        lines = parsedLines;
+                    }
+                }
+
+                HandleLogs(lines);
             }
             else if (flag.Value is PurgeFlag)
             {
                 var force = input.HasFlag<ForceFlag>();
 
                 HandlePurge(force);
+            }
+        }
+    }
+
+    private void HandleLogs(int? logLines)
+    {
+        var vpns = VpnManager.GetAll();
+        bool hasAnyActiveLogs = false;
+
+        logLines = logLines != null ? logLines : 10;
+
+        Console.WriteLine("===============================================================================================");
+
+        foreach (var vpn in vpns)
+        {
+            var name = VpnHelper.GetNameFromType(vpn.Type).ToUpper();
+            var installStatus = vpn.GetInstallStatus();
+            var activeStatus = vpn.GetActiveStatus();
+
+            if (installStatus == VpnInstallStatus.INSTALLED && activeStatus == VpnActiveStatus.ACTIVE)
+            {
+                hasAnyActiveLogs = true;
+
+                Console.WriteLine($"SYSTEM LOGS FOR: {name}");
+
+                var logContent = vpn.GetLogs(logLines.Value);
+
+                if (string.IsNullOrEmpty(logContent))
+                {
+                    Console.WriteLine("    ○ No recent log entries available or journal is empty.");
+                }
+                else
+                {
+                    var lines = logContent.Split('\n');
+                    foreach (var line in lines)
+                    {
+                        Console.WriteLine($"    {line}");
+                    }
+                }
+
                 Console.WriteLine();
             }
         }
+
+        if (!hasAnyActiveLogs)
+        {
+            Console.WriteLine("  No active VPN engines found. Run a service before checking system logs.");
+        }
+
+        Console.WriteLine("===============================================================================================");
     }
 
     private void HandlePurge(bool force)
@@ -158,7 +218,7 @@ public class ServerFlagsHandler : IHandler
         int totalActiveClients = 0;
         long globalBytesReceived = 0;
         long globalBytesSent = 0;
-        
+
         Console.WriteLine("===============================================================================================");
         Console.WriteLine($"  {"NAME",-12} {"INSTALL STATUS",-16} {"ENGINE STATE",-14} {"PORT",-15} {"CLIENTS",-12} {"TRAFFIC (DN/UP)"}");
         Console.WriteLine("  ---------------------------------------------------------------------------------------------");
