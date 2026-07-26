@@ -99,7 +99,7 @@ public class ClientsShowHandler : IHandler
             }
         }
 
-        Console.WriteLine($"{interStr}{client.Name} | {providerStr} | {activeStr} | {networkStatusStr} | Created: {dateStr}");
+        Console.WriteLine($"{interStr}{client.Name} ({client.Id}) {"|", 4} {providerStr} | {activeStr} | {networkStatusStr} | Created: {dateStr}");
 
         if (stats != null)
         {

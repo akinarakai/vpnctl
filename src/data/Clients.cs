@@ -7,6 +7,7 @@ using System.Text.Json.Serialization;
 [JsonDerivedType(typeof(ShadowsocksClient), typeDiscriminator: "ss")]
 public abstract class VpnClientBase
 {
+    public long Id { get; set; } = 1;
     public string Name { get; init; } = string.Empty;
     public string ConfigStr { get; init; } = string.Empty;
     public bool IsActive { get; set; } = true;

@@ -70,7 +70,7 @@ public class XrayData
 
 public class ClientsData
 {
-    public long LastClientId { get; set; } = 1;
+    public long LastClientId { get; set; } = 0;
     public List<VpnClientBase> Clients { get; set; } = new();
 }
 

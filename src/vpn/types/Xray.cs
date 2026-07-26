@@ -123,7 +123,7 @@ public class Xray : IVpnService
 
         var cmd = Kernel.Cmd;
 
-        var restartResult = cmd.Run("systemctl", "restart xray", true, true);
+        var restartResult = cmd.Run("systemctl", "restart xray", true, false);
         if (!restartResult.Success)
             throw new Exception($"Failed to restart Xray-core service! {restartResult.Text}");
 

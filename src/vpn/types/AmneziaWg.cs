@@ -59,12 +59,19 @@ public class AmneziaWg : IVpnService
 
     public bool Restart()
     {
+        var awg = Kernel.Data.GetServerState().Awg;
+        var cmd = Kernel.Cmd;
+
         RegenerateConfig();
 
-        var cmd = Kernel.Cmd;
-        var awg = Kernel.Data.GetServerState().Awg;
+        var reloadResult = cmd.Run("systemctl", $"reload awg-quick@{awg.InterfaceName}", true, false);
+        if (!reloadResult.Success)
+        {
+            var restartResult = cmd.Run("systemctl", $"restart awg-quick@{awg.InterfaceName}", true, false);
+            if (!restartResult.Success)
+                throw new Exception($"Failed to restart AmneziaWG service! {restartResult.Text}");
+        }
 
-        cmd.Run("systemctl", $"restart awg-quick@{awg.InterfaceName}", true, false);
         return true;
     }
 
@@ -122,66 +129,17 @@ public class AmneziaWg : IVpnService
     {
         if (_cachedStats != null) return _cachedStats;
 
-        var result = new List<ClientOnlineStats>();
-
         var data = Kernel.Data;
         var awg = data.GetServerState().Awg;
 
         var dump = Kernel.Cmd.Run("awg", $"show {awg.InterfaceName} dump", true, false);
         if (!dump.Success)
         {
-            Logger.Warn($"Failed to get dump for interface \"{awg.InterfaceName}\". {dump.Text.Trim()}");
-            return result;
+            //Logger.Warn($"Failed to get dump for interface \"{awg.InterfaceName}\". {dump.Text.Trim()}");
+            return new List<ClientOnlineStats>();
         }
-
-        var lines = dump.Text.Trim().Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        foreach (var line in lines)
-        {
-            var parts = line.Split('\t');
-
-            if (parts.Length < 7) continue;
-            if (parts.Length > 10) continue;
-
-            // parts[0] - awg0
-            // parts[1] - public key
-            // parts[2] - preshared-key
-            // parts[3] - endpoint
-            // parts[4] - allowed-ips
-            // parts[5] - last handshake (unix timestamp)
-            // parts[6] - bytes received
-            // parts[7] - bytes transmitted
-
-            var publicKey = parts[0].Trim();
-            var endPoint = parts[2].Trim();
-
-            if (endPoint == "none" || endPoint == "(none)")
-            {
-                endPoint = null;
-            }
-
-            DateTime? lastConnectAt = null;
-            if (long.TryParse(parts[4].Trim(), out long unixTime) && unixTime > 0)
-            {
-                lastConnectAt = DateTimeOffset.FromUnixTimeSeconds(unixTime).UtcDateTime;
-            }
-
-            long.TryParse(parts[5].Trim(), out long rxBytes);
-            long.TryParse(parts[6].Trim(), out long txBytes);
-
-            var client = new ClientOnlineStats
-            {
-                ClientId = publicKey,
-                Endpoint = endPoint,
-                LastConnectAt = lastConnectAt,
-                BytesRecived = txBytes,
-                BytesSent = rxBytes
-            };
-
-            //System.Console.WriteLine(client.ToString());
-
-            result.Add(client);
-        }
-
+ 
+        var result = FormatManager.GetAwgOrWgOnlineStats(dump.Text);
         return _cachedStats = result;
     }
 

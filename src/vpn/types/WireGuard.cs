@@ -4,6 +4,8 @@ public class WireGuard : IVpnService
 
     public VpnServiceType Type => VpnServiceType.WIREGUARD;
 
+    private List<ClientOnlineStats>? _cachedStats = null;
+
     public bool Install(bool isForce)
     {
         if (!Directory.Exists(_basePath))
@@ -90,16 +92,18 @@ public class WireGuard : IVpnService
 
     public bool Restart()
     {
-        var data = Kernel.Data;
-
-        var serverData = data.GetServerState();
+        var wg = Kernel.Data.GetServerState().Wg;
         var cmd = Kernel.Cmd;
 
         UpdateSystemConfig();
 
-        var restartResult = cmd.Run("systemctl", $"restart wg-quick@{serverData.Wg.InterfaceName}", true, true);
-        if (!restartResult.Success)
-            throw new Exception($"Failed to restart WireGuard service! {restartResult.Text}");
+        var reloadResult = cmd.Run("systemctl", $"reload wg-quick@{wg.InterfaceName}", true, false);
+        if (!reloadResult.Success)
+        {
+            var restartResult = cmd.Run("systemctl", $"restart wg-quick@{wg.InterfaceName}", true, false);
+            if (!restartResult.Success)
+                throw new Exception($"Failed to restart WireGuard service! {restartResult.Text}");
+        }
 
         return true;
     }
@@ -107,13 +111,13 @@ public class WireGuard : IVpnService
     public bool ToggleActive(bool active)
     {
         var data = Kernel.Data;
-        
+
         var serverData = data.GetServerState();
         var cmd = Kernel.Cmd;
 
         var systemctlAction = active ? "start" : "stop";
 
-        var result = cmd.Run("systemctl", $"{systemctlAction} wg-quick@{serverData.Wg.InterfaceName}", true, true);
+        var result = cmd.Run("systemctl", $"{systemctlAction} wg-quick@{serverData.Wg.InterfaceName}", true, false);
         if (!result.Success)
         {
             throw new Exception($"Failed to toggle WireGuard service! {result.Text}");
@@ -160,7 +164,7 @@ public class WireGuard : IVpnService
         if (string.IsNullOrEmpty(serverIp))
             return null;
 
-        if (!File.Exists(_basePath+ $"/{serverData.Wg.InterfaceName}.conf"))
+        if (!File.Exists(_basePath + $"/{serverData.Wg.InterfaceName}.conf"))
             throw new Exception($"File \"{serverData.Wg.InterfaceName}.conf\" not found");
 
         var serverPrivateKey = GetPrivateKey();
@@ -192,9 +196,20 @@ public class WireGuard : IVpnService
 
     public List<ClientOnlineStats> GetOnlineStats()
     {
-        var result = new List<ClientOnlineStats>();
+        if (_cachedStats != null) return _cachedStats;
 
-        return result;
+        var data = Kernel.Data;
+        var wg = data.GetServerState().Wg;
+
+        var dump = Kernel.Cmd.Run("wg", $"show {wg.InterfaceName} dump", true, false);
+        if (!dump.Success)
+        {
+            //Logger.Warn($"Failed to get dump for interface \"{wg.InterfaceName}\". {dump.Text.Trim()}");
+            return new List<ClientOnlineStats>();
+        }
+
+        var result = FormatManager.GetAwgOrWgOnlineStats(dump.Text);
+        return _cachedStats = result;
     }
 
     public VpnInstallStatus GetInstallStatus()
@@ -202,7 +217,7 @@ public class WireGuard : IVpnService
         var cmd = Kernel.Cmd;
 
         var result = cmd.Run("wg", "--version", false, false);
-        return result.Success ? VpnInstallStatus.INSTALLED :VpnInstallStatus.NOT_INSTALLED;
+        return result.Success ? VpnInstallStatus.INSTALLED : VpnInstallStatus.NOT_INSTALLED;
     }
 
     public VpnActiveStatus GetActiveStatus()

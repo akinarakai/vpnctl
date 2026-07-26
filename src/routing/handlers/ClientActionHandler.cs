@@ -99,6 +99,7 @@ public class ClientActionHandler : IHandler
     private void HandleCreate(InputContext input, IDataProvider data)
     {
         string clientName = string.Empty;
+
         var clientsState = data.GetClientsState();
 
         if (input.TryGetFlag<NameFlag>(out var nameFlag) && nameFlag?.Arguments?.Count > 0)
@@ -113,7 +114,9 @@ public class ClientActionHandler : IHandler
         }
         else
         {
-            clientName = $"client_{clientsState.LastClientId}";
+            var lastId = clientsState.LastClientId;
+            var newId = lastId + 1;
+            clientName = $"client_{newId}";
         }
 
         if (data.IsNameExist(clientName))
@@ -170,8 +173,10 @@ public class ClientActionHandler : IHandler
 
         if (client != null)
         {
-            clientsState.Clients.Add(client);
             clientsState.LastClientId++;
+            client.Id = clientsState.LastClientId;
+
+            clientsState.Clients.Add(client);
             vpn?.Restart();
 
             Logger.Text($"--- CONFIG FOR {clientName} ---");

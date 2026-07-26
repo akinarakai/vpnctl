@@ -111,7 +111,8 @@ public class CfgFlag : IInputFlag
 
 public class PasswordFlag : IInputFlag
 {
-    public string Name => "pwd";
+    public string Name => "password";
+    public string? ShortName => "pwd";
     public int ArgumentCount => 1;
     public string Description => "Set or pass a custom password/preshared key for the connection";
 }

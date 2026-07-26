@@ -36,8 +36,8 @@ public class SystemConfigurator : ISystemConfigurator
     {
         Kernel.File.Delete(_path);
 
-        Kernel.Cmd.Run("sysctl", "-w net.ipv4.ip_forward=0", true);
-        Kernel.Cmd.Run("sysctl", "-w net.ipv6.conf.all.forwarding=0", true);
+        Kernel.Cmd.Run("sysctl", "-w net.ipv4.ip_forward=0", true, false);
+        Kernel.Cmd.Run("sysctl", "-w net.ipv6.conf.all.forwarding=0", true, false);
 
         var result = Kernel.Cmd.Run("sysctl", "--system", true, false);
         if (!result.Success)
