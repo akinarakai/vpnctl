@@ -14,13 +14,6 @@ public class AwgFlagsHandler : IHandler
 
     public void Handle(InputContext input)
     {
-        var awg = VpnManager.GetType<AmneziaWg>();
-        if (awg.GetInstallStatus() == VpnInstallStatus.NOT_INSTALLED)
-        {
-            Logger.Warn($"AmneziaWG is already uninstalled!");
-            return;
-        }
-
         bool needRestart = false;
         foreach (var flag in input.Flags)
         {
@@ -28,36 +21,32 @@ public class AwgFlagsHandler : IHandler
             {
                 Logger.Info($"Start gen keys for AmneziaWG...");
 
-                var isForce = input.HasFlag<ForceFlag>();
-                if (awg.GenerateServerKeys(isForce))
-                {
-                    needRestart = true;
-                    Logger.Success($"AmneziaWG successfully generate keys.");
-                }
+                ApiClient.Get().SendProtocolAction(ProtocolType.AMNEZIAWG, ProtocolNetActionType.GEN_KEYS);
+
+                Logger.Success($"AmneziaWG successfully generate keys.");
+                needRestart = true;
             }
             else if (flag.Value is ObfuscateFlag)
             {
                 Logger.Info($"Start randomize obfuscate AmneziaWG...");
 
-                if (awg.GenerateObfuscation())
-                {
-                    needRestart = true;
-                    Logger.Success($"AmneziaWG successfully obfuscate.");
-                }
+                ApiClient.Get().SendProtocolAction(ProtocolType.AMNEZIAWG, ProtocolNetActionType.OBFUSCATE);
+
+                Logger.Success($"AmneziaWG successfully obfuscate.");
+                needRestart = true;
             }
             else if (flag.Value is RandomPortFlag)
             {
                 Logger.Info($"Start randomize port AmneziaWG...");
 
-                if (awg.RandomizePort())
-                {
-                    needRestart = true;
-                    Logger.Success($"AmneziaWG successfully port.");
-                }
+                ApiClient.Get().SendProtocolAction(ProtocolType.AMNEZIAWG, ProtocolNetActionType.RANDOMIZE_PORT);
+
+                Logger.Success($"AmneziaWG successfully port.");
+                needRestart = true;
             }
         }
 
         if (needRestart)
-            awg.Restart();
+            ApiClient.Get().SendVpnAction(VpnServiceType.AMNEZIAWG, VpnNetActionType.RESTART);
     }
 }

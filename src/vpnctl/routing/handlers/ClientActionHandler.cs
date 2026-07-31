@@ -29,79 +29,39 @@ public class ClientActionHandler : IHandler
 
     public void Handle(InputContext input)
     {
-        var data = Kernel.Data;
-        string action = string.Empty;
-
-        if (input.Args[0] == "client")
-        {
-            action = input.Args[1];
-        }
-        else
-        {
-            action = input.Args[2];
-        }
+        var action = input.Args[0] == "client" ? input.Args[1] : input.Args[2];
 
         if (action == "add")
         {
-            HandleCreate(input, data);
+            HandleCreate(input);
         }
         else if (action == "del")
         {
-            HandleDelete(input, data);
+            HandleDelete(input);
         }
         else if (action == "up" || action == "down")
         {
-            HandleActive(input, data, action);
+            HandleActive(input, action);
         }
     }
 
-    private void HandleActive(InputContext input, IDataProvider data, string action)
+    private void HandleActive(InputContext input, string action)
     {
-        var clientsState = data.GetClientsState();
         var clientName = input.Args[2];
+        var actionType = action == "up" ? ClientNetActionType.UP : ClientNetActionType.DOWN;
 
-        var client = clientsState.Clients.FirstOrDefault(c => c.Name == clientName);
-        if (client == null)
+        var request = new ClientActionRequest
         {
-            Logger.Warn($"Failed found client with name {clientName}");
-            return;
-        }
+            Name = clientName,
+            Action = actionType,
+        };
 
-        client.IsActive = action == "up";
-
-        if (client is WireGuardClient)
-        {
-            var wg = VpnManager.GetType<WireGuard>();
-            wg.Restart();
-
-            Logger.Success($"WireGuard client \"{clientName}\" {action}.");
-        }
-        else if (client is AmneziaWgClient)
-        {
-            var awg = VpnManager.GetType<AmneziaWg>();
-            awg.Restart();
-
-            Logger.Success($"AmneziaWG client \"{clientName}\" {action}.");
-        }
-        else if (client is VlessClient || client is SocksClient || client is ShadowsocksClient)
-        {
-            var xray = VpnManager.GetType<Xray>();
-            xray.Restart();
-
-            Logger.Success($"Xray client \"{clientName}\" {action}.");
-        }
-        else
-        {
-            var unknownType = client.GetType().Name;
-            Logger.Warn($"Client \"{clientName}\" was {action}, but its service type \"{unknownType}\" is unhandled.");
-        }
+        ApiClient.Get().SendClientAction(request);
     }
 
-    private void HandleCreate(InputContext input, IDataProvider data)
+    private void HandleCreate(InputContext input)
     {
-        string clientName = string.Empty;
-
-        var clientsState = data.GetClientsState();
+        string? clientName = null;
 
         if (input.TryGetFlag<NameFlag>(out var nameFlag) && nameFlag?.Arguments?.Count > 0)
         {
@@ -113,75 +73,29 @@ public class ClientActionHandler : IHandler
                 return;
             }
         }
-        else
+
+        var proto = FormatManager.GetProtocolFromShortName(input.Args[0]);
+        var needShortId = input.HasFlag<ShortIdFlag>();
+
+        string? password = null;
+        if (input.TryGetFlag<PasswordFlag>(out var pwdFlag) && pwdFlag?.Arguments?.Count > 0)
         {
-            var lastId = clientsState.LastClientId;
-            var newId = lastId + 1;
-            clientName = $"client_{newId}";
+            password = pwdFlag.Arguments[0];
         }
 
-        if (data.IsNameExist(clientName))
+        var request = new ClientActionRequest
         {
-            Logger.Warn($"Failed create client: name {clientName} exist!");
-            return;
-        }
+            Protocol = proto,
+            Name = clientName,
+            NeedShortId = needShortId,
+            Password = password,
+            Action = ClientNetActionType.ADD,
+        };
 
-        VpnClientBase? client = null;
-        IVpnService? vpn = null;
-
-        var protoName = input.Args[0];
-        if (protoName == "wg")
-        {
-            var wg = VpnManager.GetType<WireGuard>();
-            client = wg.CreateClient(clientName);
-            vpn = wg;
-        }
-        else if (protoName == "awg")
-        {
-            var awg = VpnManager.GetType<AmneziaWg>();
-            client = awg.CreateClient(clientName);
-            vpn = awg;
-        }
-        else if (protoName == "vless" || protoName == "socks" || protoName == "ss")
-        {
-            if (Enum.TryParse<XrayProtoType>(protoName, true, out var proto))
-            {
-                var xray = VpnManager.GetType<Xray>();
-
-                if (proto == XrayProtoType.VLESS)
-                {
-                    var needShortId = input.HasFlag<ShortIdFlag>();
-                    client = xray.CreateVlessClient(clientName, needShortId);
-                }
-                else if (proto == XrayProtoType.SOCKS)
-                {
-                    string? password = null;
-                    if (input.TryGetFlag<PasswordFlag>(out var pwdFlag) && pwdFlag?.Arguments?.Count > 0)
-                    {
-                        password = pwdFlag.Arguments[0];
-                    }
-
-                    client = xray.CreateSocksClient(clientName, password);
-                }
-                else if (proto == XrayProtoType.SS)
-                {
-                    client = xray.CreateSsClient(clientName);
-                }
-
-                vpn = xray;
-            }
-        }
-
+        var client = ApiClient.Get().SendClientAction(request);
         if (client != null)
         {
-            clientsState.LastClientId++;
-            client.Id = clientsState.LastClientId;
-
-            clientsState.Clients.Add(client);
-            vpn?.Restart();
-
-            Logger.Text($"--- CONFIG FOR {clientName} ---");
-            Logger.Text(client.ConfigStr);
+            Logger.Text($"--- CONFIG FOR {client.Name} ---");
             QRCode.Render(client.ConfigStr);
             Logger.Text("-------------------------------------");
         }
@@ -191,45 +105,16 @@ public class ClientActionHandler : IHandler
         }
     }
 
-    private void HandleDelete(InputContext input, IDataProvider data)
+    private void HandleDelete(InputContext input)
     {
-        var clientsState = data.GetClientsState();
         var clientName = input.Args[2];
 
-        var clientToDelete = clientsState.Clients.FirstOrDefault(c => c.Name == clientName);
-        if (clientToDelete == null)
+        var request = new ClientActionRequest
         {
-            Logger.Warn($"Failed delete: name {clientName} not exist!");
-            return;
-        }
+            Name = clientName,
+            Action = ClientNetActionType.DEL,
+        };
 
-        clientsState.Clients.Remove(clientToDelete);
-
-        if (clientToDelete is WireGuardClient)
-        {
-            var wg = VpnManager.GetType<WireGuard>();
-            wg.Restart();
-
-            Logger.Success($"WireGuard client \"{clientName}\" deleted.");
-        }
-        else if (clientToDelete is AmneziaWgClient)
-        {
-            var awg = VpnManager.GetType<AmneziaWg>();
-            awg.Restart();
-
-            Logger.Success($"AmneziaWG client \"{clientName}\" deleted.");
-        }
-        else if (clientToDelete is VlessClient || clientToDelete is SocksClient || clientToDelete is ShadowsocksClient)
-        {
-            var xray = VpnManager.GetType<Xray>();
-            xray.Restart();
-
-            Logger.Success($"Xray client \"{clientName}\" deleted.");
-        }
-        else
-        {
-            var unknownType = clientToDelete.GetType().Name;
-            Logger.Warn($"Client \"{clientName}\" was removed, but its service type \"{unknownType}\" is unhandled.");
-        }
+        ApiClient.Get().SendClientAction(request);
     }
 }

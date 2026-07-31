@@ -7,165 +7,54 @@ public class VpnFlagsHandler : IHandler
         input.HasFlag<UninstallFlag>() ||
         input.HasFlag<RestartFlag>() ||
         input.HasFlag<ShowFlag>() ||
+        input.HasFlag<InitFlag>() ||
         input.HasFlag<UpFlag>() ||
-        input.HasFlag<LogsFlag>() ||
         input.HasFlag<DownFlag>());
     }
 
     public void Handle(InputContext input)
     {
         var name = input.Args[0];
-
-        var vpn = VpnManager.Get(name);
-        if (vpn == null)
-        {
-            Logger.Warn($"Supported core engine for \"{name}\" was not found.");
-            return;
-        }
-
-        name = VpnHelper.GetNameFromType(vpn.Type);
+        var vpn = FormatManager.GetVpnTypeFromShortName(name);
 
         foreach (var flag in input.Flags)
         {
             if (flag.Value is InstallFlag)
             {
-                if (CanContinue(vpn, VpnInstallStatus.INSTALLED, name, "cannon install"))
-                {
-                    Logger.Info("Updating system package repositories...");
-                    var updateResult = Kernel.Cmd.Run("apt-get", "update -y", true, false);
-                    if (!updateResult.Success)
-                    {
-                        Logger.Warn($"System update completed with warnings. {updateResult.Text.Trim()}");
-                    }
-
-                    Logger.Info($"Start installing {name}...");
-
-                    Kernel.Data.GetServerState().NetworkInterface = Kernel.Network.GetActiveNetInterface();
-
-                    var isForce = input.HasFlag<ForceFlag>();
-                    if (vpn.Install(isForce))
-                    {
-                        Kernel.System.CreateSysctlConfig();
-                        vpn.Restart();
-
-                        Logger.Success($"{name} successfully installed!");
-                    }
-                    else Logger.Error($"Failed to install {name}.");
-                }
+                ApiClient.Get().SendVpnAction(vpn, VpnNetActionType.INSTALL);
             }
             else if (flag.Value is UninstallFlag)
             {
-                if (CanContinue(vpn, VpnInstallStatus.NOT_INSTALLED, name, "cannon uninstall"))
-                {
-                    Logger.Info($"Start uninstalling {name}...");
-
-                    if (vpn.Uninstall())
-                    {
-                        Logger.Success($"{name} successfully uninstalled!");
-                    }
-                    else Logger.Error($"Failed to uninstall {name}.");
-                }
+                ApiClient.Get().SendVpnAction(vpn, VpnNetActionType.UNINSTALL);
             }
             else if (flag.Value is RestartFlag)
             {
-                if (CanContinue(vpn, VpnInstallStatus.NOT_INSTALLED, name, "cannon restart"))
-                {
-                    Logger.Info($"Restarting {name}...");
-
-                    if (vpn.Restart())
-                    {
-                        Logger.Success($"{name} successfully restarted!");
-                    }
-                    else Logger.Error($"Failed to restart {name}.");
-                }
+                ApiClient.Get().SendVpnAction(vpn, VpnNetActionType.RESTART);
             }
             else if (flag.Value is UpFlag)
             {
-                if (CanContinue(vpn, VpnInstallStatus.NOT_INSTALLED, name, "cannon up"))
-                {
-                    if (vpn.GetActiveStatus() == VpnActiveStatus.ACTIVE)
-                    {
-                        Logger.Warn($"{name} is already active!");
-                    }
-                    else
-                    {
-                        Logger.Info($"Turning {name} service up...");
-
-                        if (vpn.ToggleActive(true))
-                        {
-                            Logger.Success($"{name} is now up.");
-                        }
-                        else Logger.Error($"Failed to bring up {name}.");
-                    }
-                }
+                ApiClient.Get().SendVpnAction(vpn, VpnNetActionType.UP);
             }
             else if (flag.Value is DownFlag)
             {
-                if (CanContinue(vpn, VpnInstallStatus.NOT_INSTALLED, name, "cannon down"))
-                {
-                    if (vpn.GetActiveStatus() == VpnActiveStatus.INACTIVE)
-                    {
-                        Logger.Warn($"{name} is already inactive!");
-                    }
-                    else
-                    {
-                        Logger.Info($"Turning {name} service down...");
-
-                        if (vpn.ToggleActive(false))
-                        {
-                            Logger.Success($"{name} is now down.");
-                        }
-                        else Logger.Error($"Failed to bring down {name}.");
-                    }
-                }
+                ApiClient.Get().SendVpnAction(vpn, VpnNetActionType.DOWN);
+            }
+            else if (flag.Value is InitFlag)
+            {
+                ApiClient.Get().SendVpnAction(vpn, VpnNetActionType.INIT);
             }
             else if (flag.Value is LogsFlag)
             {
-                if (CanContinue(vpn, VpnInstallStatus.NOT_INSTALLED, name, "cannon get logs"))
-                {
-                    int? logLines = null;
-                    if (input.TryGetFlag<LinesFlag>(out var linesFlag) && linesFlag?.Arguments?.Count > 0)
-                    {
-                        if (int.TryParse(linesFlag.Arguments[0], out int parsedLines) && parsedLines > 0)
-                        {
-                            logLines = parsedLines;
-                        }
-                    }
-
-                    logLines = logLines != null ? logLines : 10;
-
-                    var logs = vpn.GetLogs(logLines.Value);
-
-                    var lines = logs.Split('\n');
-                    foreach (var line in lines)
-                    {
-                        Console.WriteLine($"{line}");
-                    }
-                }
+                //ApiClient.Get().SendVpnAction(vpn, VpnActionType.RESTART);
             }
             else if (flag.Value is ShowFlag)
             {
-                HandleShow(vpn, name);
+                //HandleShow(vpn, name);
             }
         }
     }
 
-    private bool CanContinue(IVpnService vpn, VpnInstallStatus checkStatus, string name, string extra)
-    {
-        if (checkStatus == VpnInstallStatus.NOT_INSTALLED && vpn.GetInstallStatus() == VpnInstallStatus.NOT_INSTALLED)
-        {
-            Logger.Warn($"{name} is already uninstalled! {extra}");
-            return false;
-        }
-        else if (checkStatus == VpnInstallStatus.INSTALLED && vpn.GetInstallStatus() == VpnInstallStatus.INSTALLED)
-        {
-            Logger.Warn($"{name} is already installed! {extra}");
-            return false;
-        }
-
-        return true;
-    }
-
+    /*
     private void HandleShow(IVpnService vpn, string name)
     {
         var installStatus = vpn.GetInstallStatus();
@@ -194,4 +83,5 @@ public class VpnFlagsHandler : IHandler
 
         Console.WriteLine("==================================================");
     }
+    */
 }

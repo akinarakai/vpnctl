@@ -10,8 +10,7 @@ public class ServerFlagsHandler : IHandler
     public bool CanHandle(InputContext input)
     {
         return input.Count == 0 &&
-        (input.HasFlag<InitFlag>() ||
-        input.HasFlag<HelpFlag>() ||
+        (input.HasFlag<HelpFlag>() ||
         input.HasFlag<PurgeFlag>() ||
         input.HasFlag<LogsFlag>() ||
         input.HasFlag<StatusFlag>());
@@ -21,11 +20,7 @@ public class ServerFlagsHandler : IHandler
     {
         foreach (var flag in input.Flags)
         {
-            if (flag.Value is InitFlag)
-            {
-                HandleInit();
-            }
-            else if (flag.Value is HelpFlag)
+            if (flag.Value is HelpFlag)
             {
                 HandleHelp();
             }
@@ -66,42 +61,35 @@ public class ServerFlagsHandler : IHandler
 
     private void HandleLogs(int? logLines)
     {
-        var vpns = VpnManager.GetAll();
-        bool hasAnyActiveLogs = false;
+        var response = ApiClient.Get().GetVpnLogs(logLines ?? 10);
 
-        logLines = logLines != null ? logLines : 10;
+        bool hasAnyActiveLogs = false;
 
         Console.WriteLine("===============================================================================================");
 
-        foreach (var vpn in vpns)
+        foreach (var vpn in response.Vpns)
         {
-            var name = VpnHelper.GetNameFromType(vpn.Type).ToUpper();
-            var installStatus = vpn.GetInstallStatus();
-            var activeStatus = vpn.GetActiveStatus();
+            var name = FormatManager.GetVpnNameFromType(vpn.Type).ToUpper();
+            
+            Console.WriteLine($"SYSTEM LOGS FOR: {name}");
 
-            if (installStatus == VpnInstallStatus.INSTALLED && activeStatus == VpnActiveStatus.ACTIVE)
+            var logs = vpn.LogsLines;
+
+            if (logs.Count == 0)
+            {
+                Console.WriteLine("    ○ No recent log entries available is empty.");
+            }
+            else
             {
                 hasAnyActiveLogs = true;
 
-                Console.WriteLine($"SYSTEM LOGS FOR: {name}");
-
-                var logContent = vpn.GetLogs(logLines.Value);
-
-                if (string.IsNullOrEmpty(logContent))
+                foreach (var line in logs)
                 {
-                    Console.WriteLine("    ○ No recent log entries available or journal is empty.");
+                    Console.WriteLine($"    {line}");
                 }
-                else
-                {
-                    var lines = logContent.Split('\n');
-                    foreach (var line in lines)
-                    {
-                        Console.WriteLine($"    {line}");
-                    }
-                }
-
-                Console.WriteLine();
             }
+
+            Console.WriteLine();
         }
 
         if (!hasAnyActiveLogs)
@@ -141,88 +129,13 @@ public class ServerFlagsHandler : IHandler
             Console.ResetColor();
         }
 
-
-        Logger.Info("Stopping and removing VPN services...");
-
-        var vpns = VpnManager.GetAll();
-        foreach (var vpn in vpns)
-        {
-            var name = VpnHelper.GetNameFromType(vpn.Type).ToUpper();
-            if (vpn.GetInstallStatus() == VpnInstallStatus.INSTALLED)
-            {
-                try
-                {
-                    Logger.Info($"Stopping and purging {name}...");
-                    vpn.Uninstall();
-                }
-                catch (Exception ex)
-                {
-                    Logger.Error($"Failed to uninstall {name}: {ex.Message}");
-                }
-            }
-        }
-
-        // Firewall
-        try
-        {
-            //Logger.Info("Clearing firewall rules...");
-            // Kernel.Firewall.RemoveAllVpnRules();
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"Failed to reset firewall: {ex.Message}");
-        }
-
-        // Sys config
-        try
-        {
-            Logger.Info("Reverting sysctl..");
-
-            Kernel.System.DeleteSysctlConfig();
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"Failed to delete system configuration: {ex.Message}");
-        }
-
-        // Storage
-        try
-        {
-            Logger.Info("Deleting application configuration files...");
-            Kernel.Data.DeleteFiles();
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"Failed to clear data files: {ex.Message}");
-        }
+        ApiClient.Get().SendPurge();
 
         Logger.Success("System successfully cleared of all vpnctl traces!");
     }
 
-    private void HandleInit()
-    {
-        Logger.Info("Initialization data...");
-
-        var data = Kernel.Data;
-
-        var server = data.GetServerState();
-        var clients = data.GetClientsState();
-
-        Kernel.System.CreateSysctlConfig();
-
-        data.GetServerState().NetworkInterface = Kernel.Network.GetActiveNetInterface();
-
-        Logger.Success($"System initialized successfully.");
-    }
-
     private void HandleStatus(int? iterations)
     {
-        var vpns = VpnManager.GetAll();
-
-        var data = Kernel.Data;
-        var server = data.GetServerState();
-        var clients = data.GetClientsState().Clients;
-
         ConsoleLiveView view;
         if (iterations.HasValue)
         {
@@ -237,7 +150,10 @@ public class ServerFlagsHandler : IHandler
 
         while (view.KeepRunning())
         {
+            var status = ApiClient.Get().GetStatus();
+
             int totalActiveClients = 0;
+            int totalClients = 0;
             long globalBytesReceived = 0;
             long globalBytesSent = 0;
 
@@ -245,22 +161,20 @@ public class ServerFlagsHandler : IHandler
             view.WriteLine($"  {"NAME",-12} {"INSTALL STATUS",-16} {"ENGINE STATE",-14} {"PORT",-15} {"CLIENTS",-12} {"TRAFFIC (DN/UP)"}");
             view.WriteLine("  ---------------------------------------------------------------------------------------------");
 
-            foreach (var vpn in vpns)
+            foreach (var vpn in status.Vpns)
             {
-                var name = VpnHelper.GetNameFromType(vpn.Type).ToUpper();
-                var installStatus = vpn.GetInstallStatus();
-                var activeStatus = vpn.GetActiveStatus();
-
-                int totalClientsForVpn = GetTotalClientsForVpn(vpn.Type, clients);
+                var name = FormatManager.GetVpnNameFromType(vpn.Type).ToUpper();
 
                 string installText;
                 string activeText;
                 string portText = "-";
                 string trafficFormat = "-";
 
-                var clientsCountText = $"{totalClientsForVpn} / 0";
+                var clientsCountText = $"{vpn.Clients} / 0";
 
-                if (installStatus == VpnInstallStatus.NOT_INSTALLED)
+                totalClients += vpn.Clients;
+
+                if (vpn.Installed == VpnInstallStatus.NOT_INSTALLED)
                 {
                     installText = "○ NOT INSTALLED";
                     activeText = "-";
@@ -269,39 +183,20 @@ public class ServerFlagsHandler : IHandler
                 {
                     installText = "● INSTALLED";
 
-                    if (vpn.Type == VpnServiceType.WIREGUARD)
-                        portText = server.Wg.Port.ToString();
-                    else if (vpn.Type == VpnServiceType.AMNEZIAWG)
-                        portText = server.Awg.Port.ToString();
-                    else if (vpn.Type == VpnServiceType.XRAY)
-                    {
-                        var vlessPort = server.Xray.Vless.Port;
-                        var socksPort = server.Xray.Socks.Port;
-                        var ssPort = server.Xray.Shadowsocks.Port;
+                    portText = string.Join("/", vpn.Ports);
 
-                        portText = $"{vlessPort}/{socksPort}/{ssPort}";
-                    }
-
-                    var onlineStats = vpn.GetOnlineStats(false);
-
-                    if (activeStatus == VpnActiveStatus.ACTIVE)
+                    if (vpn.Active == VpnActiveStatus.ACTIVE)
                     {
                         activeText = "● ACTIVE";
 
-                        int onlineClientsForVpn = onlineStats.Count(c => c.LastConnectAt.HasValue &&
-                            (DateTime.UtcNow - c.LastConnectAt.Value).TotalMinutes < 3);
+                        totalActiveClients += vpn.OnlineClients;
+                        clientsCountText = $"{vpn.Clients} / {vpn.OnlineClients}";
 
-                        totalActiveClients += onlineClientsForVpn;
-                        clientsCountText = $"{totalClientsForVpn} / {onlineClientsForVpn}";
-
-                        long vpnBytesReceived = onlineStats.Sum(o => o.BytesRecived);
-                        long vpnBytesSent = onlineStats.Sum(o => o.BytesSent);
-
-                        var traffic = FormatManager.FormatTraffic(vpnBytesReceived, vpnBytesSent);
+                        var traffic = FormatManager.FormatTraffic(vpn.BytesReceived, vpn.BytesSent);
                         trafficFormat = $"{traffic.down} / {traffic.up}";
 
-                        globalBytesReceived += vpnBytesReceived;
-                        globalBytesSent += vpnBytesSent;
+                        globalBytesReceived += vpn.BytesReceived;
+                        globalBytesSent += vpn.BytesSent;
                     }
                     else
                     {
@@ -317,12 +212,12 @@ public class ServerFlagsHandler : IHandler
 
             var globalTraffic = FormatManager.FormatTraffic(globalBytesReceived, globalBytesSent);
 
-            view.WriteLine($"  Total Registered Clients: {clients.Count} | Total Active Connections: {totalActiveClients}");
+            view.WriteLine($"  Total Registered Clients: {totalClients} | Total Active Connections: {totalActiveClients}");
             view.WriteLine($"  Total Server Traffic: Download: {globalTraffic.down} | Upload: {globalTraffic.up}");
-            view.WriteLine($"  Server IP: {Kernel.Network.GetIP()} | Network Interface: {server.NetworkInterface}");
+            view.WriteLine($"  Server IP: {status.ServerIp} | Network Interface: {status.NetworkInterface}");
             view.WriteLine("  ---------------------------------------------------------------------------------------------");
 
-            var system = Kernel.Monitor.GetStats();
+            var system = status.System;
             var uptimeStr = $"{system.Uptime.Days}d {system.Uptime.Hours}h";
 
             view.WriteLine($"  SYSTEM: CPU: {system.CpuUsage}% | Load: {system.LoadAverage:0.00} | RAM: {system.UsageMemory} / {system.TotalMemory} MB | Uptime: {uptimeStr}");
@@ -330,24 +225,6 @@ public class ServerFlagsHandler : IHandler
 
             view.Wait(TimeSpan.FromSeconds(2));
         }
-    }
-
-    private int GetTotalClientsForVpn(VpnServiceType type, IReadOnlyList<VpnClientBase> clients)
-    {
-        if (type == VpnServiceType.WIREGUARD)
-        {
-            return clients.Count(c => c is WireGuardClient);
-        }
-        else if (type == VpnServiceType.AMNEZIAWG)
-        {
-            return clients.Count(c => c is AmneziaWgClient);
-        }
-        else if (type == VpnServiceType.XRAY)
-        {
-            return clients.Count(c => c is VlessClient || c is SocksClient || c is ShadowsocksClient);
-        }
-
-        return 0;
     }
 
     private void HandleHelp()

@@ -6,6 +6,9 @@ src/[Bb]uild/
 [Oo]bj/
 [Bb]uild/
 
+[Rr]elease/
+[Pp]ackage/
+
 src/.idea/
 src/.vscode/
 src/.vs/
