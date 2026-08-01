@@ -95,4 +95,24 @@ public static class FormatManager
 
         return utcTime.ToString("dd.MM.yyyy");
     }
+
+    public static string GetUptime(TimeSpan uptime)
+    {
+        if (uptime.TotalDays >= 1)
+        {
+            return $"{uptime.Days}d {uptime.Hours}h {uptime.Minutes}m";
+        }
+
+        if (uptime.TotalHours >= 1)
+        {
+            return $"{uptime.Hours}h {uptime.Minutes}m";
+        }
+
+        if (uptime.TotalMinutes >= 1)
+        {
+            return $"{uptime.Minutes}m";
+        }
+
+        return $"{uptime.Seconds}s";
+    }
 }

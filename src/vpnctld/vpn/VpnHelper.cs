@@ -2,21 +2,6 @@ public static class VpnHelper
 {
     private static XraySecurity? _cachedSecurity = null;
 
-    public static int GetFreePort(int exclude, int min, int max)
-    {
-        var server = Kernel.Data.GetServerState();
-        for (int port = min; port <= max; port++)
-        {
-            if (port == exclude) continue;
-
-            var result = Kernel.Cmd.Run("ss", $"-H -lntu '( sport = :{port} )'");
-            if (string.IsNullOrWhiteSpace(result.Text))
-                return port;
-        }
-
-        throw new Exception();
-    }
-
     public static string GetNameFromType(VpnServiceType type)
     {
         return type switch

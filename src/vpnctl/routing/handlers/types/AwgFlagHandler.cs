@@ -21,7 +21,7 @@ public class AwgFlagsHandler : IHandler
             {
                 Logger.Info($"Start gen keys for AmneziaWG...");
 
-                ApiClient.Get().SendProtocolAction(ProtocolType.AMNEZIAWG, ProtocolNetActionType.GEN_KEYS);
+                ApiClient.Current.SendProtocolAction(ProtocolType.AMNEZIAWG, ProtocolNetActionType.GEN_KEYS);
 
                 Logger.Success($"AmneziaWG successfully generate keys.");
                 needRestart = true;
@@ -30,7 +30,7 @@ public class AwgFlagsHandler : IHandler
             {
                 Logger.Info($"Start randomize obfuscate AmneziaWG...");
 
-                ApiClient.Get().SendProtocolAction(ProtocolType.AMNEZIAWG, ProtocolNetActionType.OBFUSCATE);
+                ApiClient.Current.SendProtocolAction(ProtocolType.AMNEZIAWG, ProtocolNetActionType.OBFUSCATE);
 
                 Logger.Success($"AmneziaWG successfully obfuscate.");
                 needRestart = true;
@@ -39,7 +39,7 @@ public class AwgFlagsHandler : IHandler
             {
                 Logger.Info($"Start randomize port AmneziaWG...");
 
-                ApiClient.Get().SendProtocolAction(ProtocolType.AMNEZIAWG, ProtocolNetActionType.RANDOMIZE_PORT);
+                ApiClient.Current.SendProtocolAction(ProtocolType.AMNEZIAWG, ProtocolNetActionType.RANDOMIZE_PORT);
 
                 Logger.Success($"AmneziaWG successfully port.");
                 needRestart = true;
@@ -47,6 +47,6 @@ public class AwgFlagsHandler : IHandler
         }
 
         if (needRestart)
-            ApiClient.Get().SendVpnAction(VpnServiceType.AMNEZIAWG, VpnNetActionType.RESTART);
+            ApiClient.Current.SendVpnAction(VpnServiceType.AMNEZIAWG, VpnNetActionType.RESTART);
     }
 }

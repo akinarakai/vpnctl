@@ -13,9 +13,9 @@ public class AmneziaWg : IVpnService
 
     public bool Install()
     {
-        Kernel.File.CreateDirectories(PathRegistry.AwgDir);
+        Kernel.Get<IFileManager>().CreateDirectories(PathRegistry.AwgDir);
 
-        var cmd = Kernel.Cmd;
+        var cmd = Kernel.Get<ICommandRunner>();
 
         var deps = cmd.Run("apt-get", "install software-properties-common python3-launchpadlib curl iptables -y", true);
         if (!deps.Success)
@@ -39,25 +39,25 @@ public class AmneziaWg : IVpnService
     {
         ToggleActive(false);
 
-        var cmd = Kernel.Cmd;
-        var awg = Kernel.Data.GetServerState().Awg;
+        var cmd = Kernel.Get<ICommandRunner>();
+        var awg = Kernel.Get<IDataProvider>().GetServerState().Awg;
 
         Logger.Info("Purging AmneziaWG package from system...");
 
         cmd.Run("apt-get", "purge amneziawg amneziawg-dkms amneziawg-tools -y", true, false);
 
-        Kernel.File.Delete(PathRegistry.AwgDir);
+        Kernel.Get<IFileManager>().Delete(PathRegistry.AwgDir);
 
         var port = awg.Port;
-        Kernel.Firewall.CloseUdp(port);
+        Kernel.Get<IFirewallManager>().CloseUdp(port);
 
         return true;
     }
 
     public bool Restart()
     {
-        var awg = Kernel.Data.GetServerState().Awg;
-        var cmd = Kernel.Cmd;
+        var awg = Kernel.Get<IDataProvider>().GetServerState().Awg;
+        var cmd = Kernel.Get<ICommandRunner>();
 
         RegenerateConfig();
 
@@ -74,10 +74,10 @@ public class AmneziaWg : IVpnService
 
     public VpnClientBase? CreateClient(string name)
     {
-        var cmd = Kernel.Cmd;
+        var cmd = Kernel.Get<ICommandRunner>();
 
-        var server = Kernel.Data.GetServerState();
-        var serverIp = Kernel.Network.GetIP();
+        var server = Kernel.Get<IDataProvider>().GetServerState();
+        var serverIp = Kernel.Get<INetworkManager>().GetIP();
 
         var privResult = cmd.Run("awg", "genkey", true, false);
         string clientPriv = privResult.Text.Trim();
@@ -85,7 +85,7 @@ public class AmneziaWg : IVpnService
         var pubResult = cmd.Run("bash", $"-c \"echo '{clientPriv}' | awg pubkey\"", true, false);
         string clientPub = pubResult.Text.Trim();
 
-        var clientsState = Kernel.Data.GetClientsState();
+        var clientsState = Kernel.Get<IDataProvider>().GetClientsState();
 
         var nextId = clientsState.LastClientId + 1;
         var allowedIp = IpAllocator.GetNextIp("10.8", nextId);
@@ -104,10 +104,10 @@ public class AmneziaWg : IVpnService
 
     public bool ToggleActive(bool active)
     {
-        var awg = Kernel.Data.GetServerState().Awg;
+        var awg = Kernel.Get<IDataProvider>().GetServerState().Awg;
         var action = active ? "start" : "stop";
 
-        var result = Kernel.Cmd.Run("systemctl", $"{action} awg-quick@{awg.InterfaceName}", true, false);
+        var result = Kernel.Get<ICommandRunner>().Run("systemctl", $"{action} awg-quick@{awg.InterfaceName}", true, false);
         if (!result.Success)
             throw new Exception($"Failed {action} AmneziaWG. {result.Text.Trim()}");
 
@@ -116,7 +116,7 @@ public class AmneziaWg : IVpnService
 
     public string GetInfo()
     {
-        var result = Kernel.Cmd.Run("awg", "show", false, false);
+        var result = Kernel.Get<ICommandRunner>().Run("awg", "show", false, false);
         if (result.Success) return result.Text.Trim();
 
         return string.Empty;
@@ -124,18 +124,18 @@ public class AmneziaWg : IVpnService
 
     public string GetLogs(int lines)
     {
-        var awg = Kernel.Data.GetServerState().Awg;
+        var awg = Kernel.Get<IDataProvider>().GetServerState().Awg;
 
-        var result = Kernel.Cmd.Run("journalctl", $"-u awg-quick@{awg.InterfaceName} -n {lines} --no-pager", true, false);
+        var result = Kernel.Get<ICommandRunner>().Run("journalctl", $"-u awg-quick@{awg.InterfaceName} -n {lines} --no-pager", true, false);
         return result.Text.Trim();
     }
 
     public List<ClientOnlineStats> GetOnlineStats()
     {
-        var data = Kernel.Data;
+        var data = Kernel.Get<IDataProvider>();
         var awg = data.GetServerState().Awg;
 
-        var dump = Kernel.Cmd.Run("awg", $"show {awg.InterfaceName} dump", true, false);
+        var dump = Kernel.Get<ICommandRunner>().Run("awg", $"show {awg.InterfaceName} dump", true, false);
         if (!dump.Success)
         {
             Logger.Warn($"Failed to get dump for interface \"{awg.InterfaceName}\". {dump.Text.Trim()}");
@@ -148,7 +148,7 @@ public class AmneziaWg : IVpnService
 
     public VpnInstallStatus GetInstallStatus()
     {
-        var result = Kernel.Cmd.Run("awg", "--version", false, false);
+        var result = Kernel.Get<ICommandRunner>().Run("awg", "--version", false, false);
         return result.Success ? VpnInstallStatus.INSTALLED : VpnInstallStatus.NOT_INSTALLED;
     }
 
@@ -157,15 +157,15 @@ public class AmneziaWg : IVpnService
         if (GetInstallStatus() == VpnInstallStatus.NOT_INSTALLED)
             return VpnActiveStatus.INACTIVE;
 
-        var awg = Kernel.Data.GetServerState().Awg;
+        var awg = Kernel.Get<IDataProvider>().GetServerState().Awg;
 
-        return Kernel.Network.InterfaceExists(awg.InterfaceName) ? VpnActiveStatus.ACTIVE : VpnActiveStatus.INACTIVE;
+        return Kernel.Get<INetworkManager>().InterfaceExists(awg.InterfaceName) ? VpnActiveStatus.ACTIVE : VpnActiveStatus.INACTIVE;
     }
 
     public bool GenerateServerKeys()
     {
-        var server = Kernel.Data.GetServerState();
-        var cmd = Kernel.Cmd;
+        var server = Kernel.Get<IDataProvider>().GetServerState();
+        var cmd = Kernel.Get<ICommandRunner>();
 
         var privResult = cmd.Run("awg", "genkey", true, false);
         string privateKey = privResult.Text.Trim();
@@ -208,7 +208,7 @@ public class AmneziaWg : IVpnService
         }
         */
 
-        var awg = Kernel.Data.GetServerState().Awg;
+        var awg = Kernel.Get<IDataProvider>().GetServerState().Awg;
 
         awg.Jc = RandomNumberGenerator.GetInt32(3, 5);
         awg.Jmin = RandomNumberGenerator.GetInt32(40, 80);
@@ -241,8 +241,8 @@ public class AmneziaWg : IVpnService
     public bool RandomizePort()
     {
         // 39743
-        var awg = Kernel.Data.GetServerState().Awg;
-        var firewall = Kernel.Firewall;
+        var awg = Kernel.Get<IDataProvider>().GetServerState().Awg;
+        var firewall = Kernel.Get<IFirewallManager>();
 
         var oldPort = awg.Port;
         var newPort = RandomNumberGenerator.GetInt32(30000, 45000);
@@ -266,13 +266,13 @@ public class AmneziaWg : IVpnService
 
     private void RegenerateConfig()
     {
-        var data = Kernel.Data;
+        var data = Kernel.Get<IDataProvider>();
 
         var server = data.GetServerState();
         var clients = data.GetClientsState();
 
         var fullConfig = ConfigFormatBuilder.BuildAwgServerConfig(server, clients);
 
-        Kernel.File.TrySaveFile(PathRegistry.GetAwgConf(server.Awg.InterfaceName), fullConfig);
+        Kernel.Get<IFileManager>().TrySaveFile(PathRegistry.GetAwgConf(server.Awg.InterfaceName), fullConfig);
     }
 }

@@ -1,8 +1,8 @@
-public class ServerFlagsHandler : IHandler
+public class FlagsHandler : IHandler
 {
     private readonly IReadOnlyList<IInputFlag> _supportedFlags;
 
-    public ServerFlagsHandler(IReadOnlyList<IInputFlag> supportedFlags)
+    public FlagsHandler(IReadOnlyList<IInputFlag> supportedFlags)
     {
         _supportedFlags = supportedFlags;
     }
@@ -26,16 +26,7 @@ public class ServerFlagsHandler : IHandler
             }
             else if (flag.Value is StatusFlag)
             {
-                int? lines = null;
-                if (input.TryGetFlag<LinesFlag>(out var linesFlag) && linesFlag?.Arguments?.Count > 0)
-                {
-                    if (int.TryParse(linesFlag.Arguments[0], out int parsedLines) && parsedLines > 0)
-                    {
-                        lines = parsedLines;
-                    }
-                }
-
-                HandleStatus(lines);
+                HandleStatus(input.HasFlag<WatchFlag>());
             }
             else if (flag.Value is LogsFlag)
             {
@@ -61,7 +52,7 @@ public class ServerFlagsHandler : IHandler
 
     private void HandleLogs(int? logLines)
     {
-        var response = ApiClient.Get().GetVpnLogs(logLines ?? 10);
+        var response = ApiClient.Current.GetVpnLogs(logLines ?? 10);
 
         bool hasAnyActiveLogs = false;
 
@@ -70,7 +61,7 @@ public class ServerFlagsHandler : IHandler
         foreach (var vpn in response.Vpns)
         {
             var name = FormatManager.GetVpnNameFromType(vpn.Type).ToUpper();
-            
+
             Console.WriteLine($"SYSTEM LOGS FOR: {name}");
 
             var logs = vpn.LogsLines;
@@ -129,28 +120,32 @@ public class ServerFlagsHandler : IHandler
             Console.ResetColor();
         }
 
-        ApiClient.Get().SendPurge();
+        ApiClient.Current.SendPurge();
 
         Logger.Success("System successfully cleared of all vpnctl traces!");
     }
 
-    private void HandleStatus(int? iterations)
+    private void HandleStatus(bool isWatch)
     {
         ConsoleLiveView view;
-        if (iterations.HasValue)
+        if (isWatch)
         {
-            view = new ConsoleLiveView(iterations.Value);
+            view = new ConsoleLiveView();
         }
         else
         {
-            view = new ConsoleLiveView();
+            view = new ConsoleLiveView(1);
         }
 
         view.Start();
 
         while (view.KeepRunning())
         {
-            var status = ApiClient.Get().GetStatus();
+            var api = ApiClient.Current;
+
+            var vpns = api.GetVpns();
+            var monitor = api.GetSystemMonitor();
+            var info = api.GetServerInfo();
 
             int totalActiveClients = 0;
             int totalClients = 0;
@@ -161,7 +156,7 @@ public class ServerFlagsHandler : IHandler
             view.WriteLine($"  {"NAME",-12} {"INSTALL STATUS",-16} {"ENGINE STATE",-14} {"PORT",-15} {"CLIENTS",-12} {"TRAFFIC (DN/UP)"}");
             view.WriteLine("  ---------------------------------------------------------------------------------------------");
 
-            foreach (var vpn in status.Vpns)
+            foreach (var vpn in vpns.Vpns)
             {
                 var name = FormatManager.GetVpnNameFromType(vpn.Type).ToUpper();
 
@@ -214,13 +209,11 @@ public class ServerFlagsHandler : IHandler
 
             view.WriteLine($"  Total Registered Clients: {totalClients} | Total Active Connections: {totalActiveClients}");
             view.WriteLine($"  Total Server Traffic: Download: {globalTraffic.down} | Upload: {globalTraffic.up}");
-            view.WriteLine($"  Server IP: {status.ServerIp} | Network Interface: {status.NetworkInterface}");
+            view.WriteLine($"  SERVER: IP: {info.Response.Ip} | Interface: {info.Response.NetworkInterface} | Hostname: {info.Response.Hostname} | Latency: {info.LatencyMs:0}ms");
+            view.WriteLine($"  SYSTEM: OS: {info.Response.Os} | Arch: {info.Response.Arch} | UTC: {info.Response.UtcTime:yyyy-MM-dd HH:mm:ss}");
             view.WriteLine("  ---------------------------------------------------------------------------------------------");
 
-            var system = status.System;
-            var uptimeStr = $"{system.Uptime.Days}d {system.Uptime.Hours}h";
-
-            view.WriteLine($"  SYSTEM: CPU: {system.CpuUsage}% | Load: {system.LoadAverage:0.00} | RAM: {system.UsageMemory} / {system.TotalMemory} MB | Uptime: {uptimeStr}");
+            view.WriteLine($"  MONITOR: CPU: {monitor.CpuUsage}% | Load: {monitor.LoadAverage:0.00} | RAM: {monitor.UsageMemory} / {monitor.TotalMemory} MB | Uptime: {FormatManager.GetUptime(monitor.Uptime)}");
             view.WriteLine("===============================================================================================");
 
             view.Wait(TimeSpan.FromSeconds(2));

@@ -21,27 +21,37 @@ public class VpnFlagsHandler : IHandler
         {
             if (flag.Value is InstallFlag)
             {
-                ApiClient.Get().SendVpnAction(vpn, VpnNetActionType.INSTALL);
+                ApiClient.Current.SendVpnAction(vpn, VpnNetActionType.INSTALL);
             }
             else if (flag.Value is UninstallFlag)
             {
-                ApiClient.Get().SendVpnAction(vpn, VpnNetActionType.UNINSTALL);
+                ApiClient.Current.SendVpnAction(vpn, VpnNetActionType.UNINSTALL);
             }
             else if (flag.Value is RestartFlag)
             {
-                ApiClient.Get().SendVpnAction(vpn, VpnNetActionType.RESTART);
+                ApiClient.Current.SendVpnAction(vpn, VpnNetActionType.RESTART);
             }
             else if (flag.Value is UpFlag)
             {
-                ApiClient.Get().SendVpnAction(vpn, VpnNetActionType.UP);
+                ApiClient.Current.SendVpnAction(vpn, VpnNetActionType.UP);
             }
             else if (flag.Value is DownFlag)
             {
-                ApiClient.Get().SendVpnAction(vpn, VpnNetActionType.DOWN);
+                ApiClient.Current.SendVpnAction(vpn, VpnNetActionType.DOWN);
             }
             else if (flag.Value is InitFlag)
             {
-                ApiClient.Get().SendVpnAction(vpn, VpnNetActionType.INIT);
+                Logger.Warn("If keys already exist on the server, all existing connections will be reset.\n" + "Do you want to continue? (y/n)");
+
+                var answer = Console.ReadLine();
+
+                if (answer?.ToLower() != "y")
+                {
+                    Logger.Info("Operation cancelled.");
+                    return;
+                }
+
+                ApiClient.Current.SendVpnAction(vpn, VpnNetActionType.INIT);
             }
             else if (flag.Value is LogsFlag)
             {

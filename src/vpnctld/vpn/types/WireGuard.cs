@@ -9,9 +9,9 @@ public class WireGuard : IVpnService
 
     public bool Install()
     {
-        Kernel.File.CreateDirectories(PathRegistry.WgDir);
+        Kernel.Get<IFileManager>().CreateDirectories(PathRegistry.WgDir);
 
-        var cmd = Kernel.Cmd;
+        var cmd = Kernel.Get<ICommandRunner>();
 
         Logger.Info("Installing WireGuard binary components via package manager...");
         var result = cmd.Run("apt-get", "install wireguard iptables -y", true, false);
@@ -29,7 +29,7 @@ public class WireGuard : IVpnService
     {
         ToggleActive(false);
 
-        var cmd = Kernel.Cmd;
+        var cmd = Kernel.Get<ICommandRunner>();
 
         var result = cmd.Run("apt", "purge wireguard wireguard-tools -y", true);
         if (!result.Success)
@@ -37,16 +37,16 @@ public class WireGuard : IVpnService
             throw new Exception($"WireGuard uninstall failed! {result.Text}");
         }
 
-        Kernel.File.Delete(PathRegistry.WgDir);
+        Kernel.Get<IFileManager>().Delete(PathRegistry.WgDir);
         return true;
     }
 
     public bool GenerateKeys()
     {
-        var data = Kernel.Data;
+        var data = Kernel.Get<IDataProvider>();
 
         var serverData = data.GetServerState();
-        var cmd = Kernel.Cmd;
+        var cmd = Kernel.Get<ICommandRunner>();
 
         var privResult = cmd.Run("wg", "genkey", true, false);
         if (!privResult.Success)
@@ -70,8 +70,8 @@ public class WireGuard : IVpnService
 
     public bool Restart()
     {
-        var wg = Kernel.Data.GetServerState().Wg;
-        var cmd = Kernel.Cmd;
+        var wg = Kernel.Get<IDataProvider>().GetServerState().Wg;
+        var cmd = Kernel.Get<ICommandRunner>();
 
         UpdateSystemConfig();
 
@@ -88,10 +88,10 @@ public class WireGuard : IVpnService
 
     public bool ToggleActive(bool active)
     {
-        var wg = Kernel.Data.GetServerState().Wg;
+        var wg = Kernel.Get<IDataProvider>().GetServerState().Wg;
         var action = active ? "start" : "stop";
 
-        var result = Kernel.Cmd.Run("systemctl", $"{action} wg-quick@{wg.InterfaceName}", true, false);
+        var result = Kernel.Get<ICommandRunner>().Run("systemctl", $"{action} wg-quick@{wg.InterfaceName}", true, false);
         if (!result.Success)
             throw new Exception($"Failed {action} Wireguard. {result.Text.Trim()}");
 
@@ -100,7 +100,7 @@ public class WireGuard : IVpnService
 
     public VpnClientBase? CreateClient(string name)
     {
-        var data = Kernel.Data;
+        var data = Kernel.Get<IDataProvider>();
 
         var clients = data.GetClientsState();
         var wgClientsCount = clients.Clients.Count(c => c is WireGuardClient);
@@ -108,7 +108,7 @@ public class WireGuard : IVpnService
         var nextId = clients.LastClientId + 1;
         var allowedIp = IpAllocator.GetNextIp("10.0", nextId);
 
-        var cmd = Kernel.Cmd;
+        var cmd = Kernel.Get<ICommandRunner>();
 
         var privResult = cmd.Run("wg", "genkey", true, false);
         if (!privResult.Success)
@@ -129,11 +129,11 @@ public class WireGuard : IVpnService
         if (string.IsNullOrEmpty(serverData.Wg.PublicKey))
             throw new Exception($"Public key for WireGuard not found.");
 
-        var serverIp = Kernel.Network.GetIP();
+        var serverIp = Kernel.Get<INetworkManager>().GetIP();
         if (string.IsNullOrEmpty(serverIp))
             return null;
 
-        if (!Kernel.File.Exists(PathRegistry.GetWgConf(serverData.Wg.InterfaceName)))
+        if (!Kernel.Get<IFileManager>().Exists(PathRegistry.GetWgConf(serverData.Wg.InterfaceName)))
             throw new Exception($"File \"{serverData.Wg.InterfaceName}.conf\" not found");
 
         var serverPrivateKey = GetPrivateKey();
@@ -155,7 +155,7 @@ public class WireGuard : IVpnService
 
     public string GetInfo()
     {
-        var cmd = Kernel.Cmd;
+        var cmd = Kernel.Get<ICommandRunner>();
 
         var result = cmd.Run("wg", "show", false, false);
         if (result.Success) return result.Text.Trim();
@@ -165,18 +165,18 @@ public class WireGuard : IVpnService
 
     public string GetLogs(int lines)
     {
-        var wg = Kernel.Data.GetServerState().Wg;
+        var wg = Kernel.Get<IDataProvider>().GetServerState().Wg;
 
-        var result = Kernel.Cmd.Run("journalctl", $"-u wg-quick@{wg.InterfaceName} -n {lines} --no-pager", true, false);
+        var result = Kernel.Get<ICommandRunner>().Run("journalctl", $"-u wg-quick@{wg.InterfaceName} -n {lines} --no-pager", true, false);
         return result.Text.Trim();
     }
 
     public List<ClientOnlineStats> GetOnlineStats()
     {
-        var data = Kernel.Data;
+        var data = Kernel.Get<IDataProvider>();
         var wg = data.GetServerState().Wg;
 
-        var dump = Kernel.Cmd.Run("wg", $"show {wg.InterfaceName} dump", true, false);
+        var dump = Kernel.Get<ICommandRunner>().Run("wg", $"show {wg.InterfaceName} dump", true, false);
         if (!dump.Success)
         {
             Logger.Warn($"Failed to get dump for interface \"{wg.InterfaceName}\". {dump.Text.Trim()}");
@@ -189,7 +189,7 @@ public class WireGuard : IVpnService
 
     public VpnInstallStatus GetInstallStatus()
     {
-        var cmd = Kernel.Cmd;
+        var cmd = Kernel.Get<ICommandRunner>();
 
         var result = cmd.Run("wg", "--version", false, false);
         return result.Success ? VpnInstallStatus.INSTALLED : VpnInstallStatus.NOT_INSTALLED;
@@ -200,26 +200,26 @@ public class WireGuard : IVpnService
         if (GetInstallStatus() == VpnInstallStatus.NOT_INSTALLED)
             return VpnActiveStatus.INACTIVE;
 
-        var wg = Kernel.Data.GetServerState().Wg;
+        var wg = Kernel.Get<IDataProvider>().GetServerState().Wg;
 
-        return Kernel.Network.InterfaceExists(wg.InterfaceName) ? VpnActiveStatus.ACTIVE : VpnActiveStatus.INACTIVE;
+        return Kernel.Get<INetworkManager>().InterfaceExists(wg.InterfaceName) ? VpnActiveStatus.ACTIVE : VpnActiveStatus.INACTIVE;
     }
 
     private void UpdateSystemConfig()
     {
-        var data = Kernel.Data;
+        var data = Kernel.Get<IDataProvider>();
 
         var clients = data.GetClientsState();
         var server = data.GetServerState();
 
         var fullConfig = ConfigFormatBuilder.GetWgServerConfString(server, clients);
 
-        Kernel.File.TrySaveFile(PathRegistry.GetWgConf(server.Wg.InterfaceName), fullConfig);
+        Kernel.Get<IFileManager>().TrySaveFile(PathRegistry.GetWgConf(server.Wg.InterfaceName), fullConfig);
     }
 
     private string GetPrivateKey()
     {
-        var data = Kernel.Data;
+        var data = Kernel.Get<IDataProvider>();
 
         var server = data.GetServerState();
         if (string.IsNullOrEmpty(server.Wg.PrivateKey))

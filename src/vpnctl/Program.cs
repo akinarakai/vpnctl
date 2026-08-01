@@ -14,10 +14,15 @@ public class Program
 
         var timer = Stopwatch.StartNew();
 
+        Kernel.Register<IServersProfileProvider>(() => new ServersProfileProvider());
+        Kernel.Register<ICommandRunner>(() => new LinuxCommandRunner());
+        Kernel.Register<IFileManager>(() => new BaseFileManager());
+
         var flagsList = FlagsInstance.GetAll();
 
         var router = new ArgsRouter();
-        router.AddHandler(() => new ServerFlagsHandler(flagsList));
+        router.AddHandler(() => new FlagsHandler(flagsList));
+        router.AddHandler(() => new ServersProfileHandler());
         router.AddHandler(() => new ClientActionHandler());
         router.AddHandler(() => new ClientsShowHandler());
         router.AddHandler(() => new VpnFlagsHandler());
@@ -37,12 +42,21 @@ public class Program
                 return;
             }
         }
+        catch (ApiErrorException ex)
+        {
+            Logger.Error($"Api error: {ex.Message}");
+        }
         catch (Exception ex)
         {
             Logger.Error($"Internal error: {ex.Message}");
         }
         finally
         {
+            if (Kernel.IsCreated<IServersProfileProvider>())
+            {
+                Kernel.Get<IServersProfileProvider>().TrySave();
+            }
+
             timer.Stop();
             Logger.Info($"Execution completed in {timer.Elapsed.TotalSeconds:F2} seconds.");
         }

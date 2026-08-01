@@ -14,7 +14,7 @@ public class Xray : IVpnService
 
     public bool Install()
     {
-        var cmd = Kernel.Cmd;
+        var cmd = Kernel.Get<ICommandRunner>();
 
         cmd.Run("apt-get", "install curl unzip iptables -y", true, false);
 
@@ -40,7 +40,7 @@ public class Xray : IVpnService
 
     public bool Uninstall()
     {
-        var cmd = Kernel.Cmd;
+        var cmd = Kernel.Get<ICommandRunner>();
 
         cmd.Run("systemctl", "stop xray", true, false);
         cmd.Run("systemctl", "disable xray", true, false);
@@ -89,9 +89,9 @@ public class Xray : IVpnService
 
     public bool GenerateRealityKeys()
     {
-        var data = Kernel.Data;
+        var data = Kernel.Get<IDataProvider>();
         var server = data.GetServerState();
-        var cmd = Kernel.Cmd;
+        var cmd = Kernel.Get<ICommandRunner>();
 
         var keyGenResult = cmd.Run("xray", "x25519", true, false);
         if (!keyGenResult.Success || string.IsNullOrWhiteSpace(keyGenResult.Text))
@@ -111,7 +111,7 @@ public class Xray : IVpnService
 
     public bool GenerateDefaultUuid()
     {
-        var data = Kernel.Data;
+        var data = Kernel.Get<IDataProvider>();
         var server = data.GetServerState();
 
         server.Xray.Vless.DefaultUuid = Guid.NewGuid().ToString();
@@ -122,7 +122,7 @@ public class Xray : IVpnService
     {
         UpdateSystemConfig();
 
-        var cmd = Kernel.Cmd;
+        var cmd = Kernel.Get<ICommandRunner>();
 
         var restartResult = cmd.Run("systemctl", "restart xray", true, false);
         if (!restartResult.Success)
@@ -135,7 +135,7 @@ public class Xray : IVpnService
     {
         var systemctlAction = active ? "start" : "stop";
 
-        var cmd = Kernel.Cmd;
+        var cmd = Kernel.Get<ICommandRunner>();
 
         var result = cmd.Run("systemctl", $"{systemctlAction} xray", true, true);
         if (!result.Success)
@@ -148,10 +148,10 @@ public class Xray : IVpnService
 
     public VpnClientBase? CreateVlessClient(string name, bool needShortId)
     {
-        var data = Kernel.Data;
+        var data = Kernel.Get<IDataProvider>();
 
         var server = data.GetServerState();
-        var serverIp = Kernel.Network.GetIP();
+        var serverIp = Kernel.Get<INetworkManager>().GetIP();
 
         var clientUuid = Guid.NewGuid().ToString();
 
@@ -196,10 +196,10 @@ public class Xray : IVpnService
 
     public VpnClientBase? CreateSocksClient(string name, string? customPassword = null)
     {
-        var data = Kernel.Data;
+        var data = Kernel.Get<IDataProvider>();
 
         var serverData = data.GetServerState();
-        var serverIp = Kernel.Network.GetIP();
+        var serverIp = Kernel.Get<INetworkManager>().GetIP();
 
         var password = !string.IsNullOrEmpty(customPassword) ? customPassword : Guid.NewGuid().ToString("N")[..12];
 
@@ -213,10 +213,10 @@ public class Xray : IVpnService
 
     public VpnClientBase? CreateSsClient(string name)
     {
-        var data = Kernel.Data;
+        var data = Kernel.Get<IDataProvider>();
 
         var serverData = data.GetServerState();
-        var serverIp = Kernel.Network.GetIP();
+        var serverIp = Kernel.Get<INetworkManager>().GetIP();
 
         var method = "aes-128-gcm";
 
@@ -236,7 +236,7 @@ public class Xray : IVpnService
 
     public string GetInfo()
     {
-        var cmd = Kernel.Cmd;
+        var cmd = Kernel.Get<ICommandRunner>();
 
         var result = cmd.Run("systemctl", "status xray --no-pager", false, false);
         if (result.Success) return result.Text.Trim();
@@ -246,7 +246,7 @@ public class Xray : IVpnService
 
     public string GetLogs(int lines)
     {
-        var result = Kernel.Cmd.Run("journalctl", $"-u xray -n {lines} --no-pager", true, false);
+        var result = Kernel.Get<ICommandRunner>().Run("journalctl", $"-u xray -n {lines} --no-pager", true, false);
         return result.Text.Trim();
     }
 
@@ -259,7 +259,7 @@ public class Xray : IVpnService
 
     public VpnInstallStatus GetInstallStatus()
     {
-        var cmd = Kernel.Cmd;
+        var cmd = Kernel.Get<ICommandRunner>();
 
         var result = cmd.Run("xray", "version", false, false);
         return result.Success ? VpnInstallStatus.INSTALLED : VpnInstallStatus.NOT_INSTALLED;
@@ -270,7 +270,7 @@ public class Xray : IVpnService
         if (GetInstallStatus() == VpnInstallStatus.NOT_INSTALLED)
             return VpnActiveStatus.INACTIVE;
 
-        var cmd = Kernel.Cmd;
+        var cmd = Kernel.Get<ICommandRunner>();
 
         var result = cmd.Run("pidof", "xray", false, false);
         if (result.Success && !string.IsNullOrWhiteSpace(result.Text))
@@ -283,7 +283,7 @@ public class Xray : IVpnService
 
     private void UpdateSystemConfig()
     {
-        var data = Kernel.Data;
+        var data = Kernel.Get<IDataProvider>();
 
         var clients = data.GetClientsState();
         var server = data.GetServerState();
@@ -291,7 +291,7 @@ public class Xray : IVpnService
         var fullConfig = ConfigFormatBuilder.GetXrayServerConfig(server, clients);
         var path = Path.Combine(_basePath, "config.json");
 
-        Kernel.File.TrySaveFile(path, fullConfig);
+        Kernel.Get<IFileManager>().TrySaveFile(path, fullConfig);
     }
 }
 

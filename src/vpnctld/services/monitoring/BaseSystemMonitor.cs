@@ -4,7 +4,7 @@ public class BaseSystemMonitor : ISystemMonitor
 {
     public SystemStats GetStats()
     {
-        var cmd = Kernel.Cmd;
+        var cmd = Kernel.Get<ICommandRunner>();
         var memory = GetMemory(cmd);
 
         return new SystemStats
@@ -38,7 +38,7 @@ public class BaseSystemMonitor : ISystemMonitor
         return (0, 0);
     }
 
-    private TimeSpan GetUptime(ICommandRunner cmd)
+    public TimeSpan GetUptime(ICommandRunner cmd)
     {
         var result = cmd.Run("uptime", "-s", true, false);
         if (!result.Success)

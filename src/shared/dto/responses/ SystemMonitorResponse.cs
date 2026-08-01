@@ -1,4 +1,4 @@
-public class SystemNetData
+public class SystemMonitorResponse
 {
     public double CpuUsage { get; init; }
     public long TotalMemory { get; init; }

@@ -2,11 +2,11 @@ var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
 Kernel.Register<ICommandRunner>(() => new LinuxCommandRunner());
+Kernel.Register<IFileManager>(() => new BaseFileManager());
 Kernel.Register<IDataProvider>(() => new JsonDataProvider());
 Kernel.Register<IFirewallManager>(() => new UfwFirewallManager());
 Kernel.Register<INetworkManager>(() => new NetworkManager());
 Kernel.Register<ISystemConfigurator>(() => new SystemConfigurator());
-Kernel.Register<IFileManager>(() => new BaseFileManager());
 Kernel.Register<ISystemMonitor>(() => new BaseSystemMonitor());
 
 VpnManager.Register(() => new WireGuard());
@@ -37,21 +37,145 @@ app.Use(async (context, next) =>
     {
         if (Kernel.IsCreated<IDataProvider>())
         {
-            Kernel.Data.TrySave();
+            Kernel.Get<IDataProvider>().TrySave();
         }
     }
 });
 
-app.MapGet(ApiRoutes.Status, HandleStatus);
-app.MapGet(ApiRoutes.VpnLogs, HandleLogs);
-app.MapGet(ApiRoutes.Clients, HandleClients);
 
-app.MapPost(ApiRoutes.VpnAction, HandleVpnAction);
-app.MapPost(ApiRoutes.Purge, HandlePurge);
-app.MapPost(ApiRoutes.ClientAction, HandleClientAction);
-app.MapPost(ApiRoutes.ProtocolAction, HandleProtocolAction);
+app.MapGet(ApiRoutes.Server.Info, HandleServerInfo);
+app.MapGet(ApiRoutes.System.Monitor, HandleSystemMonitor);
 
-app.Run(Kernel.Data.GetServerState().Adress);
+app.MapGet(ApiRoutes.Vpn.List, HandleVpnList);
+app.MapGet(ApiRoutes.Vpn.Logs, HandleVpnLogs);
+
+app.MapGet(ApiRoutes.Clients.List, HandleClients);
+
+app.MapPost(ApiRoutes.Vpn.Action, HandleVpnAction);
+
+app.MapPost(ApiRoutes.Clients.Action, HandleClientAction);
+
+app.MapPost(ApiRoutes.Protocols.Action, HandleProtocolAction);
+
+app.MapPost(ApiRoutes.Maintenance.Purge, HandlePurge);
+
+var data = Kernel.Get<IDataProvider>().GetServerState();
+
+app.Run($"http://{data.ListenAddress}:{data.ListenPort}");
+
+IResult HandleSystemMonitor()
+{
+    var system = Kernel.Get<ISystemMonitor>().GetStats();
+    var response = new SystemMonitorResponse()
+    {
+        CpuUsage = system.CpuUsage,
+        TotalMemory = system.TotalMemory,
+        UsageMemory = system.UsageMemory,
+        LoadAverage = system.LoadAverage,
+        Uptime = system.Uptime,
+    };
+
+    return ApiResult.Ok(response);
+}
+
+IResult HandleServerInfo()
+{
+    var network = Kernel.Get<INetworkManager>();
+
+    var response = new ServerInfoResponse
+    {
+        Ip = network.GetIP(),
+        NetworkInterface = network.GetActiveNetInterface(),
+        Hostname = Environment.MachineName,
+        Os = System.Runtime.InteropServices.RuntimeInformation.OSDescription,
+        Arch = System.Runtime.InteropServices.RuntimeInformation.OSArchitecture.ToString(),
+        UtcTime = DateTime.UtcNow,
+        Uptime = Kernel.Get<ISystemMonitor>().GetUptime(Kernel.Get<ICommandRunner>()),
+    };
+
+    return ApiResult.Ok(response);
+}
+
+IResult HandleVpnList(VpnServiceType? type)
+{
+    var data = Kernel.Get<IDataProvider>();
+    var server = data.GetServerState();
+    var clients = data.GetClientsState().Clients;
+
+    List<int> GetPorts(VpnServiceType type)
+    {
+        var result = new List<int>();
+        switch (type)
+        {
+            case VpnServiceType.WIREGUARD:
+                result.Add(server.Wg.Port);
+                break;
+            case VpnServiceType.AMNEZIAWG:
+                result.Add(server.Awg.Port);
+                break;
+            case VpnServiceType.XRAY:
+                result.Add(server.Xray.Vless.Port);
+                result.Add(server.Xray.Socks.Port);
+                result.Add(server.Xray.Shadowsocks.Port);
+                break;
+        }
+
+        return result;
+    }
+
+    int GetTotalClients(VpnServiceType type)
+    {
+        return type switch
+        {
+            VpnServiceType.WIREGUARD => clients.Count(c => c is WireGuardClient),
+            VpnServiceType.AMNEZIAWG => clients.Count(c => c is AmneziaWgClient),
+            VpnServiceType.XRAY => clients.Count(c => c is VlessClient || c is SocksClient || c is ShadowsocksClient),
+            _ => 0
+        };
+    }
+
+    VpnNetData BuildVpnData(IVpnService vpn)
+    {
+        var stats = vpn.GetOnlineStats();
+
+        return new VpnNetData
+        {
+            Type = vpn.Type,
+            Installed = vpn.GetInstallStatus(),
+            Active = vpn.GetActiveStatus(),
+            Clients = GetTotalClients(vpn.Type),
+            OnlineClients = stats.Count(s =>
+                s.LastConnectAt.HasValue &&
+                (DateTime.UtcNow - s.LastConnectAt.Value).TotalMinutes < 3),
+            Ports = GetPorts(vpn.Type),
+            BytesReceived = stats.Sum(c => c.BytesRecived),
+            BytesSent = stats.Sum(c => c.BytesSent)
+        };
+    }
+
+    var response = new VpnListResponse();
+
+    if (type != null)
+    {
+        var vpn = VpnManager.Get(type.Value);
+        if (vpn == null)
+            return ApiResult.Bad($"Unsupported vpn type: {type}");
+
+        response.Vpns.Add(BuildVpnData(vpn));
+        return ApiResult.Ok(response);
+    }
+
+    var vpns = VpnManager.GetAll();
+
+    foreach (var vpn in vpns)
+    {
+        var stats = vpn.GetOnlineStats();
+
+        response.Vpns.Add(BuildVpnData(vpn));
+    }
+
+    return ApiResult.Ok(response);
+}
 
 IResult HandleProtocolAction(ProtocolActionRequest request)
 {
@@ -96,7 +220,7 @@ IResult HandleProtocolAction(ProtocolActionRequest request)
     else if (proto == ProtocolType.VLESS)
     {
         var xray = VpnManager.Xray;
-        var data = Kernel.Data.GetServerState().Xray;
+        var data = Kernel.Get<IDataProvider>().GetServerState().Xray;
 
         if (action == ProtocolNetActionType.GEN_KEYS)
         {
@@ -147,7 +271,9 @@ IResult HandleProtocolAction(ProtocolActionRequest request)
 
 IResult HandleClients(string? name)
 {
-    var clients = Kernel.Data.GetClientsState();
+    var data = Kernel.Get<IDataProvider>();
+
+    var clients = data.GetClientsState();
 
     if (clients.Clients.Count == 0)
     {
@@ -158,7 +284,7 @@ IResult HandleClients(string? name)
 
     if (!string.IsNullOrEmpty(name))
     {
-        var client = Kernel.Data.GetClient(name);
+        var client = data.GetClient(name);
         if (client == null)
         {
             return ApiResult.Bad($"Client '{name}' not found");
@@ -190,7 +316,9 @@ IResult HandleClients(string? name)
 IResult HandleClientAction(ClientActionRequest request)
 {
     var response = new ClientNetData();
-    var clientsState = Kernel.Data.GetClientsState();
+
+    var data = Kernel.Get<IDataProvider>();
+    var clientsState = data.GetClientsState();
 
     switch (request.Action)
     {
@@ -204,7 +332,7 @@ IResult HandleClientAction(ClientActionRequest request)
             ? $"client_{nextId}"
             : request.Name;
 
-            if (Kernel.Data.IsNameExist(clientName))
+            if (data.IsNameExist(clientName))
                 return ApiResult.Bad("Client name already exists");
 
             VpnClientBase? client = null;
@@ -334,7 +462,7 @@ IResult HandleClientAction(ClientActionRequest request)
     return ApiResult.Ok(response);
 }
 
-IResult HandleLogs(int lines)
+IResult HandleVpnLogs(int lines)
 {
     var vpns = VpnManager.GetAll();
 
@@ -388,7 +516,7 @@ IResult HandlePurge()
     {
         Logger.Info("Reverting sysctl..");
 
-        Kernel.System.DeleteSysctlConfig();
+        Kernel.Get<ISystemConfigurator>().DeleteSysctlConfig();
     }
     catch (Exception ex)
     {
@@ -399,7 +527,7 @@ IResult HandlePurge()
     try
     {
         Logger.Info("Deleting application configuration files...");
-        Kernel.Data.DeleteFiles();
+        Kernel.Get<IDataProvider>().DeleteFiles();
     }
     catch (Exception ex)
     {
@@ -490,82 +618,4 @@ IResult HandleVpnAction(VpnActionRequest request)
     }
 
     return ApiResult.Ok();
-}
-
-IResult HandleStatus()
-{
-    var vpns = VpnManager.GetAll();
-
-    var data = Kernel.Data;
-    var server = data.GetServerState();
-    var clients = data.GetClientsState().Clients;
-
-    var response = new StatusResponse();
-
-    List<int> GetPorts(VpnServiceType type)
-    {
-        var result = new List<int>();
-        switch (type)
-        {
-            case VpnServiceType.WIREGUARD:
-                result.Add(server.Wg.Port);
-                break;
-            case VpnServiceType.AMNEZIAWG:
-                result.Add(server.Awg.Port);
-                break;
-            case VpnServiceType.XRAY:
-                result.Add(server.Xray.Vless.Port);
-                result.Add(server.Xray.Socks.Port);
-                result.Add(server.Xray.Shadowsocks.Port);
-                break;
-        }
-
-        return result;
-    }
-
-    int GetTotalClients(VpnServiceType type)
-    {
-        return type switch
-        {
-            VpnServiceType.WIREGUARD => clients.Count(c => c is WireGuardClient),
-            VpnServiceType.AMNEZIAWG => clients.Count(c => c is AmneziaWgClient),
-            VpnServiceType.XRAY => clients.Count(c => c is VlessClient || c is SocksClient || c is ShadowsocksClient),
-            _ => 0
-        };
-    }
-
-    foreach (var vpn in vpns)
-    {
-        var stats = vpn.GetOnlineStats();
-
-        response.Vpns.Add(new VpnNetData
-        {
-            Type = vpn.Type,
-            Installed = vpn.GetInstallStatus(),
-            Active = vpn.GetActiveStatus(),
-            Clients = GetTotalClients(vpn.Type),
-            OnlineClients = stats.Count(s =>
-                s.LastConnectAt.HasValue &&
-                (DateTime.UtcNow - s.LastConnectAt.Value).TotalMinutes < 3),
-            Ports = GetPorts(vpn.Type),
-            BytesReceived = stats.Sum(c => c.BytesRecived),
-            BytesSent = stats.Sum(c => c.BytesSent),
-        });
-    }
-
-    var system = Kernel.Monitor.GetStats();
-
-    response.System = new SystemNetData
-    {
-        CpuUsage = system.CpuUsage,
-        TotalMemory = system.TotalMemory,
-        UsageMemory = system.UsageMemory,
-        LoadAverage = system.LoadAverage,
-        Uptime = system.Uptime,
-    };
-
-    response.ServerIp = Kernel.Network.GetIP();
-    response.NetworkInterface = data.GetServerState().NetworkInterface;
-
-    return ApiResult.Ok(response);
 }

@@ -1,18 +1,49 @@
 public static class ApiClient
 {
-    private static Client? _client = null;
+    private static Client? _current;
 
-    public static Client Get()
+    public static Client Current
     {
-        if (_client == null)
+        get
         {
-            var http = new HttpClient();
-            http.BaseAddress = new Uri("http://127.0.0.1:5180");
-            http.Timeout = TimeSpan.FromSeconds(10);
+            if (_current == null)
+            {
+                var current = Kernel.Get<IServersProfileProvider>().GetCurrent();
+                if (current == null)
+                    throw new Exception($"Current server profile not found!");
 
-            _client = new(http);
+                _current = Create(current);
+            }
+
+            return _current;
         }
-            
-        return _client;
+    }
+
+    public static Client Create(ServerProfile profile)
+    {
+        var http = new HttpClient
+        {
+            BaseAddress = new Uri(CreateUrl(profile.Address, profile.Port)),
+            Timeout = TimeSpan.FromSeconds(10)
+        };
+
+        return new Client(http);
+    }
+
+    public static void Reset()
+    {
+        _current = null;
+    }
+
+    private static string CreateUrl(string address, int port)
+    {
+        var builder = new UriBuilder
+        {
+            Scheme = "http",
+            Host = address,
+            Port = port
+        };
+
+        return builder.Uri.ToString();
     }
 }

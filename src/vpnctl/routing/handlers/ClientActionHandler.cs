@@ -56,7 +56,7 @@ public class ClientActionHandler : IHandler
             Action = actionType,
         };
 
-        ApiClient.Get().SendClientAction(request);
+        ApiClient.Current.SendClientAction(request);
     }
 
     private void HandleCreate(InputContext input)
@@ -92,7 +92,7 @@ public class ClientActionHandler : IHandler
             Action = ClientNetActionType.ADD,
         };
 
-        var client = ApiClient.Get().SendClientAction(request);
+        var client = ApiClient.Current.SendClientAction(request);
         if (client != null)
         {
             Logger.Text($"--- CONFIG FOR {client.Name} ---");
@@ -115,6 +115,6 @@ public class ClientActionHandler : IHandler
             Action = ClientNetActionType.DEL,
         };
 
-        ApiClient.Get().SendClientAction(request);
+        ApiClient.Current.SendClientAction(request);
     }
 }

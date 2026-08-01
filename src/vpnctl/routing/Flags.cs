@@ -192,3 +192,33 @@ public class NameFlag : IInputFlag
     public int ArgumentCount => 1;
     public string Description => "Name";
 }
+
+public class AddressFlag : IInputFlag
+{
+    public string Name => "address";
+    public string? ShortName => "adr";
+    public int ArgumentCount => 1;
+    public string Description => "Adr";
+}
+
+public class TokenFlag : IInputFlag
+{
+    public string Name => "token";
+    public int ArgumentCount => 1;
+    public string Description => "Token";
+}
+
+public class PortFlag : IInputFlag
+{
+    public string Name => "port";
+    public int ArgumentCount => 1;
+    public string Description => "Port";
+}
+
+public class WatchFlag : IInputFlag
+{
+    public string Name => "watch";
+    public string? ShortName => "w";
+    public int ArgumentCount => 0;
+    public string Description => "Watch";
+}

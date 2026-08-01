@@ -10,4 +10,8 @@
     <ProjectReference Include="../shared/shared.csproj"/>
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../vpnctl.core/vpnctl.core.csproj"/>
+  </ItemGroup>
+
 </Project>

@@ -30,7 +30,7 @@ public class XrayFlagsHandler : IHandler
                 {
                     Logger.Info($"Start gen keys for Reality...");
 
-                    ApiClient.Get().SendProtocolAction(ProtocolType.VLESS, ProtocolNetActionType.GEN_KEYS);
+                    ApiClient.Current.SendProtocolAction(ProtocolType.VLESS, ProtocolNetActionType.GEN_KEYS);
 
                     Logger.Success($"Reality successfully generate keys");
                     needRestart = true;
@@ -42,7 +42,7 @@ public class XrayFlagsHandler : IHandler
                 {
                     Logger.Info($"Start gen default uuid for Vless...");
 
-                    ApiClient.Get().SendProtocolAction(ProtocolType.VLESS, ProtocolNetActionType.GEN_UUID);
+                    ApiClient.Current.SendProtocolAction(ProtocolType.VLESS, ProtocolNetActionType.GEN_UUID);
 
                     Logger.Success($"Vless successfully generate uuid");
                     needRestart = true;
@@ -52,7 +52,7 @@ public class XrayFlagsHandler : IHandler
                     if (flag.Arguments?.Count > 0)
                     {
                         var value = flag.Arguments[0];
-                        ApiClient.Get().SendProtocolAction(ProtocolType.VLESS, ProtocolNetActionType.SET_SNI, value);
+                        ApiClient.Current.SendProtocolAction(ProtocolType.VLESS, ProtocolNetActionType.SET_SNI, value);
 
                         Logger.Success($"Vless successfully set new sni {value}");
                         needRestart = true;
@@ -67,7 +67,7 @@ public class XrayFlagsHandler : IHandler
                     if (flag.Arguments?.Count > 0)
                     {
                         var value = flag.Arguments[0];
-                        ApiClient.Get().SendProtocolAction(ProtocolType.VLESS, ProtocolNetActionType.SET_FINGERPRINT, value);
+                        ApiClient.Current.SendProtocolAction(ProtocolType.VLESS, ProtocolNetActionType.SET_FINGERPRINT, value);
 
                         Logger.Success($"Vless successfully set new fingerprint {value}");
                         needRestart = true;
@@ -82,7 +82,7 @@ public class XrayFlagsHandler : IHandler
                     if (flag.Arguments?.Count > 0)
                     {
                         var value = flag.Arguments[0];
-                        ApiClient.Get().SendProtocolAction(ProtocolType.VLESS, ProtocolNetActionType.SET_SECURITY, value);
+                        ApiClient.Current.SendProtocolAction(ProtocolType.VLESS, ProtocolNetActionType.SET_SECURITY, value);
 
                         Logger.Success($"Vless successfully set new security {value}");
                         needRestart = true;
@@ -96,6 +96,6 @@ public class XrayFlagsHandler : IHandler
         }
 
         if (needRestart)
-            ApiClient.Get().SendVpnAction(VpnServiceType.XRAY, VpnNetActionType.RESTART);
+            ApiClient.Current.SendVpnAction(VpnServiceType.XRAY, VpnNetActionType.RESTART);
     }
 }

@@ -41,7 +41,7 @@ public class BaseFileManager : IFileManager
     {
         if (!Exists(path)) return true;
 
-        var readResult = Kernel.Cmd.Run("sudo", $"cat {path}", true, false);
+        var readResult = Kernel.Get<ICommandRunner>().Run("sudo", $"cat {path}", true, false);
         if (!readResult.Success) return true;
 
         var driveHash = CalculateHash(readResult.Text);

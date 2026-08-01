@@ -11,6 +11,7 @@ public class ClientsShowHandler : IHandler
     {
         // client name / client list
         if (input.Count != 2) return false;
+        if (input.Args[0].ToLower() != "client") return false;
 
         var secondWord = input.Args[1].ToLower();
         if (secondWord == "del" || secondWord == "up" || secondWord == "down" || secondWord == "add")
@@ -22,7 +23,7 @@ public class ClientsShowHandler : IHandler
     public void Handle(InputContext input)
     {
         var isSingle = input.Args[1] != "list";
-        var response = ApiClient.Get().GetClients(isSingle ? input.Args[1] : null);
+        var response = ApiClient.Current.GetClients(isSingle ? input.Args[1] : null);
         if (response.Clients.Count == 0)
         {
             Logger.Warn("No clients found.");

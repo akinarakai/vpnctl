@@ -78,7 +78,8 @@ public class ServerData
 {
     public string ServerIpFallback { get; set; } = string.Empty;
     public string NetworkInterface { get; set; } = "eth0";
-    public string Adress { get; set; } = "http://127.0.0.1:5180";
+    public string ListenAddress { get; set; } = "0.0.0.0";
+    public int ListenPort { get; set; } = 8080;
 
     public SysctlConfig SysctlConfig { get; set; } = new();
 

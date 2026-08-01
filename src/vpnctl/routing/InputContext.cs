@@ -41,6 +41,17 @@ public class InputContext
         return flag != null;
     }
 
+    public string? GetFlagValue<TFlag>() where TFlag : IInputFlag
+    {
+        if (!TryGetFlag<TFlag>(out var flag))
+            return null;
+
+        if (flag?.Arguments == null || flag.Arguments.Count == 0)
+            return null;
+
+        return flag.Arguments[0];
+    }
+
     private IReadOnlyList<string> ParseContext(string[] args, IReadOnlyList<IInputFlag> supportedFlags)
     {
         var cleanArgs = new List<string>();

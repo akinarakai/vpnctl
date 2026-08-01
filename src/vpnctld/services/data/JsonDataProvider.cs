@@ -28,7 +28,7 @@ public class JsonDataProvider : IDataProvider
             {
                 var json = File.ReadAllText(_serverPath);
                 _cachedServer = JsonSerializer.Deserialize<ServerData>(json, _jsonOptions) ?? new ServerData();
-                _initialServerHash = Kernel.File.CalculateHash(json);
+                _initialServerHash = Kernel.Get<IFileManager>().CalculateHash(json);
             }
             else
             {
@@ -54,7 +54,7 @@ public class JsonDataProvider : IDataProvider
             {
                 var json = File.ReadAllText(_clientsPath);
                 _cachedClients = JsonSerializer.Deserialize<ClientsData>(json, _jsonOptions) ?? new ClientsData();
-                _initialClientsHash = Kernel.File.CalculateHash(json);
+                _initialClientsHash = Kernel.Get<IFileManager>().CalculateHash(json);
             }
             else
             {
@@ -77,7 +77,7 @@ public class JsonDataProvider : IDataProvider
             if (_cachedServer != null)
             {
                 var serverJson = JsonSerializer.Serialize(_cachedServer, _jsonOptions);
-                var currentServerHash = Kernel.File.CalculateHash(serverJson);
+                var currentServerHash = Kernel.Get<IFileManager>().CalculateHash(serverJson);
 
                 if (currentServerHash != _initialServerHash)
                 {
@@ -90,7 +90,7 @@ public class JsonDataProvider : IDataProvider
             if (_cachedClients != null)
             {
                 var clientsJson = JsonSerializer.Serialize(_cachedClients, _jsonOptions);
-                var currentClientsHash = Kernel.File.CalculateHash(clientsJson);
+                var currentClientsHash = Kernel.Get<IFileManager>().CalculateHash(clientsJson);
 
                 if (currentClientsHash != _initialClientsHash)
                 {
@@ -108,7 +108,7 @@ public class JsonDataProvider : IDataProvider
 
     public void DeleteFiles()
     {
-        Kernel.File.Delete(_serverPath, _clientsPath);
+        Kernel.Get<IFileManager>().Delete(_serverPath, _clientsPath);
         _cachedClients = null;
         _cachedServer = null;
     }

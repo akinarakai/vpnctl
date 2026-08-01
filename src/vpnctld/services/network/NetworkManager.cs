@@ -42,7 +42,7 @@ public class NetworkManager : INetworkManager
     {
         if (_cachedIp != null) return _cachedIp;
 
-        var data = Kernel.Data;
+        var data = Kernel.Get<IDataProvider>();
         var savedIp = data.GetServerState().ServerIpFallback?.Trim();
 
         if (!string.IsNullOrWhiteSpace(savedIp) && IPAddress.TryParse(savedIp, out _))
@@ -52,7 +52,7 @@ public class NetworkManager : INetworkManager
 
         Logger.Info("Cached IP is missing or invalid. Resolving via external network service...");
 
-        var cmd = Kernel.Cmd;
+        var cmd = Kernel.Get<ICommandRunner>();
 
         var ipResult = cmd.Run("curl", "-s --connect-timeout 5 https://ifconfig.me", false, false);
         if (!ipResult.Success || string.IsNullOrWhiteSpace(ipResult.Text))
@@ -72,7 +72,7 @@ public class NetworkManager : INetworkManager
 
     public bool InterfaceExists(string name)
     {
-        var result = Kernel.Cmd.Run(
+        var result = Kernel.Get<ICommandRunner>().Run(
             "ip",
             $"link show {name}",
             false,
@@ -129,7 +129,7 @@ public class NetworkManager : INetworkManager
 
     private void ExecuteIpCommand(string args)
     {
-        var result = Kernel.Cmd.Run("ip", args, true, false);
+        var result = Kernel.Get<ICommandRunner>().Run("ip", args, true, false);
         if (!result.Success)
         {
             throw new Exception($"Ip command failed: ip {args}. {result.Text.Trim()}");

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Http.Json;
 
 public class Client
@@ -9,19 +10,58 @@ public class Client
         _http = http;
     }
 
-    public StatusResponse GetStatus()
+    public ServerInfo GetServerInfo()
     {
-        return SendGet<StatusResponse>(ApiRoutes.Status);
+        var stopwatch = Stopwatch.StartNew();
+        var response = SendGet<ServerInfoResponse>(ApiRoutes.Server.Info);
+        stopwatch.Stop();
+
+        return new ServerInfo
+        {
+            Response = response,
+            LatencyMs = stopwatch.ElapsedMilliseconds
+        };
+    }
+
+    public bool TryGetServerInfo(out ServerInfo? info)
+    {
+        try
+        {
+            info = GetServerInfo();
+            return true;
+        }
+        catch
+        {
+            info = null;
+            return false;
+        }
+    }
+
+    public SystemMonitorResponse GetSystemMonitor()
+    {
+        return SendGet<SystemMonitorResponse>(ApiRoutes.System.Monitor);
     }
 
     public VpnLogsResponse GetVpnLogs(int lines)
     {
-        return SendGet<VpnLogsResponse>($"{ApiRoutes.VpnLogs}?lines={lines}");
+        return SendGet<VpnLogsResponse>($"{ApiRoutes.Vpn.Logs}?lines={lines}");
+    }
+
+    public VpnListResponse GetVpns(VpnServiceType? type = null)
+    {
+        var url = type == null
+            ? ApiRoutes.Vpn.List
+            : $"{ApiRoutes.Vpn.List}?type={type}";
+
+        return SendGet<VpnListResponse>(url);
     }
 
     public ClientsResponse GetClients(string? name = null)
     {
-        var url = string.IsNullOrEmpty(name) ? ApiRoutes.Clients : $"{ApiRoutes.Clients}?name={name}";
+        var url = string.IsNullOrEmpty(name)
+            ? ApiRoutes.Clients.List
+            : $"{ApiRoutes.Clients.List}?name={name}";
+
         return SendGet<ClientsResponse>(url);
     }
 
@@ -33,12 +73,12 @@ public class Client
             Action = action,
         };
 
-        SendPostJson(ApiRoutes.VpnAction, request);
+        SendPostJson(ApiRoutes.Vpn.Action, request);
     }
 
     public ClientNetData SendClientAction(ClientActionRequest request)
     {
-        return SendPostJson<ClientActionRequest, ClientNetData>(ApiRoutes.ClientAction, request);
+        return SendPostJson<ClientActionRequest, ClientNetData>(ApiRoutes.Clients.Action, request);
     }
 
     public void SendProtocolAction(ProtocolType type, ProtocolNetActionType action, string? value = null)
@@ -50,12 +90,12 @@ public class Client
             Value = value,
         };
 
-        SendPostJson(ApiRoutes.ClientAction, request);
+        SendPostJson(ApiRoutes.Protocols.Action, request);
     }
 
     public void SendPurge()
     {
-        SendPost(ApiRoutes.Purge);
+        SendPost(ApiRoutes.Maintenance.Purge);
     }
 
     private TResponse SendPostJson<TRequest, TResponse>(string route, TRequest body)
@@ -88,36 +128,28 @@ public class Client
 
     private T ReadResponse<T>(HttpResponseMessage response)
     {
-        var result = response.Content
-            .ReadFromJsonAsync<ApiResponse<T>>()
-            .Result;
+        var result = response.Content.ReadFromJsonAsync<ApiResponse<T>>().Result;
 
         if (result == null)
-            throw new Exception("Empty response");
+            throw new ApiErrorException((int)response.StatusCode, "Empty response");
 
         if (!result.Success)
-            throw new Exception(
-                $"Api error [{response.StatusCode}]: {result.Error}"
-            );
+            throw new ApiErrorException((int)response.StatusCode, result.Error ?? "Unknown api error");
 
         if (result.Data == null)
-            throw new Exception("Response data is empty");
+            throw new ApiErrorException((int)response.StatusCode, "Response data is empty");
 
         return result.Data;
     }
 
     private void ReadEmptyResponse(HttpResponseMessage response)
     {
-        var result = response.Content
-            .ReadFromJsonAsync<ApiResponse<object>>()
-            .Result;
+        var result = response.Content.ReadFromJsonAsync<ApiResponse<object>>().Result;
 
         if (result == null)
-            throw new Exception("Empty response");
+            throw new ApiErrorException((int)response.StatusCode, "Empty response");
 
         if (!result.Success)
-            throw new Exception(
-                $"Api error [{response.StatusCode}]: {result.Error}"
-            );
+            throw new ApiErrorException((int)response.StatusCode, result.Error ?? "Unknown api error");
     }
 }

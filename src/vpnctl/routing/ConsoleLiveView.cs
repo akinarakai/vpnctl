@@ -56,11 +56,11 @@ public class ConsoleLiveView
         return true;
     }
 
-    public void Wait(TimeSpan delay)
+    public void Wait(TimeSpan? delay = null)
     {
         if (IsEnded()) return;
 
-        Thread.Sleep(delay);
+        Thread.Sleep(delay ?? TimeSpan.FromSeconds(2));
     }
 
     public void WriteLine(string text)

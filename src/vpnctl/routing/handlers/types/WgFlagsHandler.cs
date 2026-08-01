@@ -18,7 +18,7 @@ public class WgFlagsHandler : IHandler
             {
                 Logger.Info($"Start gen keys for WireGuard...");
 
-                ApiClient.Get().SendProtocolAction(ProtocolType.WIREGUARD, ProtocolNetActionType.GEN_KEYS);
+                ApiClient.Current.SendProtocolAction(ProtocolType.WIREGUARD, ProtocolNetActionType.GEN_KEYS);
 
                 Logger.Success($"WireGuard successfully generate keys");
                 needRestart = true;
@@ -26,6 +26,6 @@ public class WgFlagsHandler : IHandler
         }
 
         if (needRestart)
-            ApiClient.Get().SendVpnAction(VpnServiceType.WIREGUARD, VpnNetActionType.RESTART);
+            ApiClient.Current.SendVpnAction(VpnServiceType.WIREGUARD, VpnNetActionType.RESTART);
     }
 }
