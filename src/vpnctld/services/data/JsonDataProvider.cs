@@ -1,116 +1,83 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 
 public class JsonDataProvider : IDataProvider
 {
-    private readonly string _serverPath = Path.Combine(PathRegistry.VpnctlDir, "server.json");
-    private readonly string _clientsPath = Path.Combine(PathRegistry.VpnctlDir, "clients.json");
-
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
         WriteIndented = true,
         TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver()
     };
 
-    private ServerData? _cachedServer = null;
-    private ClientsData? _cachedClients = null;
-
-    private string _initialServerHash = string.Empty;
-    private string _initialClientsHash = string.Empty;
-
+    private JsonState<ServerData>? _server;
+    private JsonState<ClientsData>? _clients;
+    private JsonState<List<AuthToken>>? _tokens;
 
     public ServerData GetServerState()
     {
-        if (_cachedServer != null) return _cachedServer;
-
-        try
+        if (_server == null)
         {
-            if (File.Exists(_serverPath))
-            {
-                var json = File.ReadAllText(_serverPath);
-                _cachedServer = JsonSerializer.Deserialize<ServerData>(json, _jsonOptions) ?? new ServerData();
-                _initialServerHash = Kernel.Get<IFileManager>().CalculateHash(json);
-            }
-            else
-            {
-                _cachedServer = new ServerData();
-                _initialServerHash = string.Empty;
-            }
+            var path = Path.Combine(PathRegistry.VpnctlDir, "server.json");
+            _server = new(path, Kernel.Get<IFileManager>(), _jsonOptions);
+        }
 
-            return _cachedServer;
-        }
-        catch (Exception ex)
-        {
-            throw new Exception($"Failed to get server.json: {ex.Message}");
-        }
+        return _server.Get();
     }
 
     public ClientsData GetClientsState()
     {
-        if (_cachedClients != null) return _cachedClients;
-
-        try
+        if (_clients == null)
         {
-            if (File.Exists(_clientsPath))
-            {
-                var json = File.ReadAllText(_clientsPath);
-                _cachedClients = JsonSerializer.Deserialize<ClientsData>(json, _jsonOptions) ?? new ClientsData();
-                _initialClientsHash = Kernel.Get<IFileManager>().CalculateHash(json);
-            }
-            else
-            {
-                _cachedClients = new ClientsData();
-                _initialClientsHash = string.Empty;
-            }
+            var path = Path.Combine(PathRegistry.VpnctlDir, "clients.json");
+            _clients = new(path, Kernel.Get<IFileManager>(), _jsonOptions);
+        }
 
-            return _cachedClients;
-        }
-        catch (Exception ex)
+        return _clients.Get();
+    }
+
+    public List<AuthToken> GetTokens()
+    {
+        if (_tokens == null)
         {
-            throw new Exception($"Failed to get clients.json: {ex.Message}");
+            var path = Path.Combine(PathRegistry.VpnctlDir, "tokens.json");
+            _tokens = new(path, Kernel.Get<IFileManager>(), _jsonOptions);
         }
+
+        var tokens = _tokens.Get();
+
+        if (!tokens.Any() || !tokens.Any(x => x.Level == AccessLevel.ADMIN))
+        {
+            var secret = GetSecret();
+
+            var token = new AuthToken
+            {
+                Name = $"auto-generated-admin",
+                TokenHash = TokenHasher.Hash(secret),
+                Level = AccessLevel.ADMIN
+            };
+
+            tokens.Add(token);
+
+            Logger.Info($"Created admin token: {secret}");
+
+            _tokens?.Save();
+        }
+
+        return tokens;
     }
 
     public void TrySave()
     {
-        try
-        {
-            if (_cachedServer != null)
-            {
-                var serverJson = JsonSerializer.Serialize(_cachedServer, _jsonOptions);
-                var currentServerHash = Kernel.Get<IFileManager>().CalculateHash(serverJson);
-
-                if (currentServerHash != _initialServerHash)
-                {
-                    EnsureDirectoryExists(_serverPath);
-                    File.WriteAllText(_serverPath, serverJson);
-                    _initialServerHash = currentServerHash;
-                }
-            }
-
-            if (_cachedClients != null)
-            {
-                var clientsJson = JsonSerializer.Serialize(_cachedClients, _jsonOptions);
-                var currentClientsHash = Kernel.Get<IFileManager>().CalculateHash(clientsJson);
-
-                if (currentClientsHash != _initialClientsHash)
-                {
-                    EnsureDirectoryExists(_clientsPath);
-                    File.WriteAllText(_clientsPath, clientsJson);
-                    _initialClientsHash = currentClientsHash;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            throw new Exception($"Failed to save data state: {ex.Message}");
-        }
+        _server?.Save();
+        _clients?.Save();
+        _tokens?.Save();
     }
 
     public void DeleteFiles()
     {
-        Kernel.Get<IFileManager>().Delete(_serverPath, _clientsPath);
-        _cachedClients = null;
-        _cachedServer = null;
+        _server?.Delete();
+        _clients?.Delete();
+        _tokens?.Delete();
     }
 
     public VpnClientBase? GetClient(string name)
@@ -125,12 +92,51 @@ public class JsonDataProvider : IDataProvider
         return state.Clients.Any(c => c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
     }
 
-    private void EnsureDirectoryExists(string filePath)
+    public AuthToken? GetToken(string token)
     {
-        var directory = Path.GetDirectoryName(filePath);
-        if (directory != null && !Directory.Exists(directory))
+        return GetTokens().FirstOrDefault(c => TokenHasher.Verify(token, c.TokenHash));
+    }
+
+    public void AddToken(string name, AccessLevel level, out string secret)
+    {
+        var tokens = GetTokens();
+
+        secret = GetSecret();
+
+        var token = new AuthToken
         {
-            Directory.CreateDirectory(directory);
-        }
+            Name = name,
+            TokenHash = TokenHasher.Hash(secret),
+            Level = level
+        };
+
+        tokens.Add(token);
+
+        Logger.Info($"Created new token {name}, level: {level.ToString()}");
+
+        _tokens?.Save();
+    }
+
+    public void RemoveToken(string name)
+    {
+        var tokens = GetTokens();
+
+        var token = tokens.FirstOrDefault(t => t.Name == name);
+        if (token == null)
+            throw new Exception($"Token with name '{name}' not exist");
+
+        tokens.Remove(token);
+
+        Logger.Info($"Token with name '{name}' was removed.");
+
+        _tokens?.Save();
+    }
+
+    private string GetSecret()
+    {
+        return Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+            .Replace("+", "-")
+            .Replace("/", "_")
+            .TrimEnd('=');
     }
 }

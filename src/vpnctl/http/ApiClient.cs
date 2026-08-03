@@ -27,6 +27,12 @@ public static class ApiClient
             Timeout = TimeSpan.FromSeconds(10)
         };
 
+        if (!string.IsNullOrEmpty(profile.Token))
+        {
+            http.DefaultRequestHeaders.Authorization = 
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", profile.Token);
+        }
+
         return new Client(http);
     }
 

@@ -23,6 +23,7 @@ public class Program
         var router = new ArgsRouter();
         router.AddHandler(() => new FlagsHandler(flagsList));
         router.AddHandler(() => new ServersProfileHandler());
+        router.AddHandler(() => new TokensHandler());
         router.AddHandler(() => new ClientActionHandler());
         router.AddHandler(() => new ClientsShowHandler());
         router.AddHandler(() => new VpnFlagsHandler());
@@ -44,7 +45,7 @@ public class Program
         }
         catch (ApiErrorException ex)
         {
-            Logger.Error($"Api error: {ex.Message}");
+            Logger.Error($"Api error [{ex.StatusCode}]: {ex.Message}");
         }
         catch (Exception ex)
         {

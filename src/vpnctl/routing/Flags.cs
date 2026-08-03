@@ -215,6 +215,13 @@ public class PortFlag : IInputFlag
     public string Description => "Port";
 }
 
+public class RoleFlag : IInputFlag
+{
+    public string Name => "role";
+    public int ArgumentCount => 1;
+    public string Description => "Role";
+}
+
 public class WatchFlag : IInputFlag
 {
     public string Name => "watch";

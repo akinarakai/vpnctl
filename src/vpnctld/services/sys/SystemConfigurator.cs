@@ -7,7 +7,7 @@ public class SystemConfigurator : ISystemConfigurator
 
         var configStr = ConfigFormatBuilder.GetSysctlString(config);
 
-        if (Kernel.Get<IFileManager>().TrySaveFile(PathRegistry.SysctlConf, configStr))
+        if (Kernel.Get<IFileManager>().TrySave(PathRegistry.SysctlConf, configStr))
         {
             ExecuteSystem();
 

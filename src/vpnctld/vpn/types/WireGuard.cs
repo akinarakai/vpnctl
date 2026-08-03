@@ -214,7 +214,7 @@ public class WireGuard : IVpnService
 
         var fullConfig = ConfigFormatBuilder.GetWgServerConfString(server, clients);
 
-        Kernel.Get<IFileManager>().TrySaveFile(PathRegistry.GetWgConf(server.Wg.InterfaceName), fullConfig);
+        Kernel.Get<IFileManager>().TrySave(PathRegistry.GetWgConf(server.Wg.InterfaceName), fullConfig);
     }
 
     private string GetPrivateKey()

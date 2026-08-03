@@ -42,6 +42,11 @@ public class Client
         return SendGet<SystemMonitorResponse>(ApiRoutes.System.Monitor);
     }
 
+    public AuthTokenListResponse GetTokens()
+    {
+        return SendGet<AuthTokenListResponse>(ApiRoutes.Tokens.List);
+    }
+
     public VpnLogsResponse GetVpnLogs(int lines)
     {
         return SendGet<VpnLogsResponse>($"{ApiRoutes.Vpn.Logs}?lines={lines}");
@@ -81,6 +86,25 @@ public class Client
         return SendPostJson<ClientActionRequest, ClientNetData>(ApiRoutes.Clients.Action, request);
     }
 
+    public AuthTokenResponse CreateToken(string name, AccessLevel level)
+    {
+        return SendPostJson<AuthTokenActionRequest, AuthTokenResponse>(ApiRoutes.Tokens.Action, new AuthTokenActionRequest
+        {
+            Name = name,
+            AccessLevel = level,
+            Action = AuthTokenNetAction.ADD,
+        });
+    }
+
+    public void DeleteToken(string name)
+    {
+        SendPostJson(ApiRoutes.Tokens.Action, new AuthTokenActionRequest
+        {
+            Name = name,
+            Action = AuthTokenNetAction.DEL,
+        });
+    }
+
     public void SendProtocolAction(ProtocolType type, ProtocolNetActionType action, string? value = null)
     {
         var request = new ProtocolActionRequest
@@ -105,7 +129,7 @@ public class Client
         return ReadResponse<TResponse>(response);
     }
 
-    private void SendPostJson<T>(string route, T body)
+    private void SendPostJson<TRequest>(string route, TRequest body)
     {
         var response = _http.PostAsJsonAsync(route, body).Result;
 

@@ -75,7 +75,7 @@ public static class FormatManager
         var now = DateTime.UtcNow;
         var diff = now - utcTime;
 
-        if (diff.TotalSeconds < 0)
+        if (diff.TotalSeconds < 2)
             return "just now";
 
         if (diff.TotalSeconds < 60)

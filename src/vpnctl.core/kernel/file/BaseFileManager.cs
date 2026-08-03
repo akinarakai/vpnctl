@@ -3,62 +3,75 @@ using System.Text;
 
 public class BaseFileManager : IFileManager
 {
-    public bool TrySaveFile(string path, string content)
+    public bool TrySave(string path, string content)
     {
-        if (!IsContentChanged(path, content)) return false;
+        if (!IsContentChanged(path, content))
+            return false;
 
         try
         {
             var directory = Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
             {
-                CreateDirectories(directory);
-                Logger.Info($"Directory {directory} was created.");
+                Directory.CreateDirectory(directory);
+                Logger.Info($"Directory '{directory}' created.");
             }
 
-            long bytesBefore = 0;
-            var fileInfo = new FileInfo(path);
-            if (fileInfo.Exists)
-            {
-                bytesBefore = fileInfo.Length;
-            }
+            var bytesBefore = Exists(path) ? GetFile(path).Length : 0;
 
-            File.WriteAllText(path, content);
+            File.WriteAllText(path, content, Encoding.UTF8);
 
-            fileInfo.Refresh();
-            long bytesAfter = fileInfo.Length;
+            var bytesAfter = GetFile(path).Length;
 
             Logger.Info($"File \"{Path.GetFileName(path)}\" updated. Size changed from {bytesBefore} to {bytesAfter} bytes.");
             return true;
         }
         catch (Exception ex)
         {
-            throw new Exception($"Failed to save file at {path}. {ex.Message}", ex);
+            Logger.Error($"Failed to save file '{path}' {ex.Message}");
+            return false;
+        }
+    }
+
+    public bool TryRead(string path, out string content)
+    {
+        content = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+
+        if (!Exists(path))
+            return false;
+
+        try
+        {
+            content = File.ReadAllText(path, Encoding.UTF8);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"Failed read file '{path}' {ex.Message}");
+            return false;
         }
     }
 
     public bool IsContentChanged(string path, string currentContent)
     {
-        if (!Exists(path)) return true;
+        if (!Exists(path))
+            return true;
 
-        var readResult = Kernel.Get<ICommandRunner>().Run("sudo", $"cat {path}", true, false);
-        if (!readResult.Success) return true;
+        if (GetFile(path).Length != Encoding.UTF8.GetByteCount(currentContent))
+            return true;
 
-        var driveHash = CalculateHash(readResult.Text);
-        var currentHash = CalculateHash(currentContent);
+        TryRead(path, out var readResult);
 
-        return driveHash != currentHash;
+        return CalculateHash(readResult) != CalculateHash(currentContent);
     }
 
     public string CalculateHash(string content)
     {
-        if (string.IsNullOrEmpty(content)) return string.Empty;
-
         content = content.Replace("\r\n", "\n");
-
-        var dataBytes = Encoding.UTF8.GetBytes(content);
-        var hashBytes = SHA256.HashData(dataBytes);
-        return Convert.ToHexString(hashBytes);
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
     }
 
     public bool Copy(string from, string to)
@@ -66,63 +79,60 @@ public class BaseFileManager : IFileManager
         try
         {
             if (!Exists(from))
-            {
                 return false;
-            }
 
-            var targetFolder = Path.GetDirectoryName(to);
-            if (!string.IsNullOrEmpty(targetFolder) && !Directory.Exists(targetFolder))
-            {
-                CreateDirectories(targetFolder);
-            }
+            var directory = Path.GetDirectoryName(to);
+            if (!string.IsNullOrEmpty(directory))
+                CreateDirectories(directory);
 
             File.Copy(from, to, overwrite: true);
             return true;
         }
         catch (Exception ex)
         {
-            throw new Exception($"Failed to copy file from '{from}' to '{to}': {ex.Message}");
+            throw new IOException($"Failed to copy file from '{from}' to '{to}'.", ex);
+        }
+    }
+
+    public bool Exists(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return false;
+
+        return File.Exists(path);
+    }
+
+    public void Delete(params string[] paths)
+    {
+        foreach (var path in paths)
+        {
+            if (!File.Exists(path))
+            {
+                Logger.Warn($"File '{path}' not found.");
+                continue;
+            }
+
+            File.Delete(path);
+            Logger.Info($"File '{path}' deleted.");
         }
     }
 
     public void CreateDirectories(params string[] paths)
     {
-        foreach (var dir in paths)
-        {
-            if (!Exists(dir))
-            {
-                Directory.CreateDirectory(dir);
-                Logger.Info($"Directory: '{dir}' created!");
-            }
-            else
-            {
-                Logger.Info($"Directory: '{dir}' already created");
-            }
-        }
-    }
-
-    public bool Exists(params string[] paths)
-    {
-        if (paths == null || paths.Length == 0) return false;
-
-        return paths.Any(path => File.Exists(path));
-    }
-
-    public void Delete(params string[] paths)
-    {
-        if (paths == null || paths.Length == 0) return;
-
         foreach (var path in paths)
         {
-            if (Exists(path))
+            if (Directory.Exists(path))
             {
-                File.Delete(path);
-                Logger.Info($"\"{path}\" was deleted.");
+                Logger.Info($"Directory '{path}' already exists.");
+                continue;
             }
-            else
-            {
-                Logger.Warn($"\"{path}\" not found for delete.");
-            }
+
+            Directory.CreateDirectory(path);
+            Logger.Info($"Directory '{path}' created.");
         }
+    }
+
+    private FileInfo GetFile(string path)
+    {
+        return new FileInfo(path);
     }
 }

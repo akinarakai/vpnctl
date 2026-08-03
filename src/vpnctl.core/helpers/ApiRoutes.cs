@@ -32,4 +32,10 @@ public static class ApiRoutes
     {
         public const string Purge = "/purge";
     }
+
+    public static class Tokens
+    {
+        public const string List = "/tokens/list";
+        public const string Action = "/tokens/action";
+    }
 }

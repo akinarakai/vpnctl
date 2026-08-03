@@ -291,15 +291,8 @@ public class Xray : IVpnService
         var fullConfig = ConfigFormatBuilder.GetXrayServerConfig(server, clients);
         var path = Path.Combine(_basePath, "config.json");
 
-        Kernel.Get<IFileManager>().TrySaveFile(path, fullConfig);
+        Kernel.Get<IFileManager>().TrySave(path, fullConfig);
     }
-}
-
-public enum XrayProtoType
-{
-    VLESS,
-    SOCKS,
-    SS,
 }
 
 public enum XraySecurity

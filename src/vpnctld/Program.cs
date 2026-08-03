@@ -1,4 +1,7 @@
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Logging.ClearProviders();
+
 var app = builder.Build();
 
 Kernel.Register<ICommandRunner>(() => new LinuxCommandRunner());
@@ -17,21 +20,38 @@ app.Use(async (context, next) =>
 {
     try
     {
+        if (!context.Request.Headers.TryGetValue("Authorization", out var authorization))
+        {
+            await ApiResult.Unauthorized(context);
+            return;
+        }
+
+        const string Prefix = "Bearer ";
+
+        var header = authorization.ToString();
+        if (!header.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            await ApiResult.Unauthorized(context);
+            return;
+        }
+
+        var token = header.Substring(Prefix.Length);
+
+        var authToken = Kernel.Get<IDataProvider>().GetToken(token);
+        if (authToken == null)
+        {
+            await ApiResult.Unauthorized(context);
+            return;
+        }
+
+        authToken.LastUsedAt = DateTime.UtcNow;
+
+        context.SetAuthToken(authToken);
         await next();
     }
     catch (Exception ex)
     {
-        Logger.Error(ex.ToString());
-
-        context.Response.StatusCode = 500;
-        context.Response.ContentType = "application/json";
-
-        var response = new ApiResponse<object>
-        {
-            Error = ex.Message
-        };
-
-        await context.Response.WriteAsJsonAsync(response);
+        await ApiResult.Error(context, ex.ToString());
     }
     finally
     {
@@ -43,25 +63,80 @@ app.Use(async (context, next) =>
 });
 
 
+// GET
 app.MapGet(ApiRoutes.Server.Info, HandleServerInfo);
 app.MapGet(ApiRoutes.System.Monitor, HandleSystemMonitor);
 
 app.MapGet(ApiRoutes.Vpn.List, HandleVpnList);
 app.MapGet(ApiRoutes.Vpn.Logs, HandleVpnLogs);
 
+app.MapGet(ApiRoutes.Tokens.List, HandleTokenList);
+
 app.MapGet(ApiRoutes.Clients.List, HandleClients);
 
+// POST
 app.MapPost(ApiRoutes.Vpn.Action, HandleVpnAction);
 
 app.MapPost(ApiRoutes.Clients.Action, HandleClientAction);
 
 app.MapPost(ApiRoutes.Protocols.Action, HandleProtocolAction);
 
+app.MapPost(ApiRoutes.Tokens.Action, HandleTokenActions);
+
 app.MapPost(ApiRoutes.Maintenance.Purge, HandlePurge);
 
-var data = Kernel.Get<IDataProvider>().GetServerState();
+var data = Kernel.Get<IDataProvider>();
 
-app.Run($"http://{data.ListenAddress}:{data.ListenPort}");
+Logger.Info($"vpntld started with {data.GetTokens().Count} tokens.");
+
+app.Run($"http://{data.GetServerState().ListenAddress}:{data.GetServerState().ListenPort}");
+
+IResult HandleTokenList()
+{
+    var tokens = Kernel.Get<IDataProvider>().GetTokens();
+
+    return ApiResult.Ok(new AuthTokenListResponse
+    {
+        Tokens = tokens.Select(t => t.ToNet()).ToList()
+    });
+}
+
+IResult HandleTokenActions(AuthTokenActionRequest request)
+{
+    var data = Kernel.Get<IDataProvider>();
+
+    var existing = data.GetToken(request.Name);
+
+    if (request.Action == AuthTokenNetAction.ADD)
+    {
+        if (existing != null)
+            return ApiResult.Bad($"Token with name '{request.Name}' already exists.");
+
+        if (request.Name.StartsWith("auto-", StringComparison.OrdinalIgnoreCase))
+            return ApiResult.Bad("Reserved token name.");
+
+        if (request.AccessLevel == null)
+            return ApiResult.Bad("Access level required for add.");
+
+        data.AddToken(request.Name, request.AccessLevel.Value, out var secret);
+
+        return ApiResult.Ok(new AuthTokenResponse
+        {
+            Secret = secret,
+        });
+    }
+    else if (request.Action == AuthTokenNetAction.DEL)
+    {
+        if (existing == null)
+            return ApiResult.NotFound($"Token with name '{request.Name}' not found.");
+
+        data.RemoveToken(request.Name);
+
+        return ApiResult.Ok();
+    }
+
+    return ApiResult.Bad($"Unsupported action type {request.Action}.");
+}
 
 IResult HandleSystemMonitor()
 {
@@ -287,7 +362,7 @@ IResult HandleClients(string? name)
         var client = data.GetClient(name);
         if (client == null)
         {
-            return ApiResult.Bad($"Client '{name}' not found");
+            return ApiResult.NotFound($"Client '{name}' not found");
         }
 
         response.Clients.Add(
@@ -332,7 +407,7 @@ IResult HandleClientAction(ClientActionRequest request)
             ? $"client_{nextId}"
             : request.Name;
 
-            if (data.IsNameExist(clientName))
+            if (data.GetClient(clientName) != null)
                 return ApiResult.Bad("Client name already exists");
 
             VpnClientBase? client = null;

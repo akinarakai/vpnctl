@@ -2,7 +2,7 @@ public class ServersProfileHandler : IHandler
 {
     public bool CanHandle(InputContext input)
     {
-        // server switch --name
+        // server use --name
         // server add --name --adr --token --port
         // server del --name
         // server list
@@ -14,7 +14,7 @@ public class ServersProfileHandler : IHandler
 
         var arg1 = input.Args[1].ToLower();
 
-        var isSwitch = arg1 == "switch";
+        var isSwitch = arg1 == "use";
         var isAdd = arg1 == "add";
         var isDel = arg1 == "del";
         var isList = arg1 == "list";
@@ -29,16 +29,16 @@ public class ServersProfileHandler : IHandler
         var action = input.Args[1].ToLower();
         var provider = Kernel.Get<IServersProfileProvider>();
 
-        if (action == "switch")
+        if (action == "use")
         {
             var name = input.GetFlagValue<NameFlag>();
             if (string.IsNullOrEmpty(name))
             {
-                Logger.Warn($"Please use (--name name) to use switch");
+                Logger.Warn($"Please use (--name name) to use use");
                 return;
             }
 
-            Logger.Info($"Trying switching to {name}");
+            Logger.Info($"Trying use server '{name}'");
 
             provider.SetCurrent(name);
 

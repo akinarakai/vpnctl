@@ -20,12 +20,14 @@ public class ServersProfileProvider : IServersProfileProvider
 
         try
         {
-            if (File.Exists(_path))
+            var file = Kernel.Get<IFileManager>();
+
+            if (file.Exists(_path))
             {
-                var json = File.ReadAllText(_path);
+                file.TryRead(_path,  out var json);
 
                 _cached = JsonSerializer.Deserialize<ProfileStorage>(json, _jsonOptions) ?? new ProfileStorage();
-                _initialHash = Kernel.Get<IFileManager>().CalculateHash(json);
+                _initialHash = file.CalculateHash(json);
             }
             else
             {
@@ -48,13 +50,13 @@ public class ServersProfileProvider : IServersProfileProvider
             if (_cached == null)
                 return;
 
+            var file = Kernel.Get<IFileManager>();
+
             var json = JsonSerializer.Serialize(_cached, _jsonOptions);
-            var currentHash = Kernel.Get<IFileManager>().CalculateHash(json);
+            var currentHash = file.CalculateHash(json);
             if (currentHash == _initialHash) return;
 
-            EnsureDirectoryExists(_path);
-
-            Kernel.Get<IFileManager>().TrySaveFile(_path, json);
+            file.TrySave(_path, json);
 
             _initialHash = currentHash;
         }
@@ -130,13 +132,5 @@ public class ServersProfileProvider : IServersProfileProvider
         profiles ??= GetStorage().Profiles;
 
         return profiles.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private void EnsureDirectoryExists(string filePath)
-    {
-        var directory = Path.GetDirectoryName(filePath);
-
-        if (directory != null && !Directory.Exists(directory))
-            Directory.CreateDirectory(directory);
     }
 }

@@ -1,6 +1,6 @@
 public enum AccessLevel
 {
-    VIEWER = 0,
+    USER = 0,
     MODERATOR,
     ADMIN
 }

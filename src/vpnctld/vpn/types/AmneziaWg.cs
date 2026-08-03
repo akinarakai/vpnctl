@@ -273,6 +273,6 @@ public class AmneziaWg : IVpnService
 
         var fullConfig = ConfigFormatBuilder.BuildAwgServerConfig(server, clients);
 
-        Kernel.Get<IFileManager>().TrySaveFile(PathRegistry.GetAwgConf(server.Awg.InterfaceName), fullConfig);
+        Kernel.Get<IFileManager>().TrySave(PathRegistry.GetAwgConf(server.Awg.InterfaceName), fullConfig);
     }
 }
