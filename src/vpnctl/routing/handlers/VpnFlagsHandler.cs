@@ -21,23 +21,43 @@ public class VpnFlagsHandler : IHandler
         {
             if (flag.Value is InstallFlag)
             {
+                Logger.Info($"Trying install {vpn}.");
+
                 ApiClient.Current.SendVpnAction(vpn, VpnNetActionType.INSTALL);
+
+                Logger.Success($"{vpn} successful installed.");
             }
             else if (flag.Value is UninstallFlag)
             {
+                Logger.Info($"Trying uninstall {vpn}.");
+
                 ApiClient.Current.SendVpnAction(vpn, VpnNetActionType.UNINSTALL);
+
+                Logger.Success($"{vpn} successful uninstalled.");
             }
             else if (flag.Value is RestartFlag)
-            {
+            {   
+                Logger.Info($"Trying restart {vpn}.");
+
                 ApiClient.Current.SendVpnAction(vpn, VpnNetActionType.RESTART);
+
+                Logger.Success($"{vpn} successful restarted.");
             }
             else if (flag.Value is UpFlag)
             {
+                Logger.Info($"Trying up {vpn}.");
+
                 ApiClient.Current.SendVpnAction(vpn, VpnNetActionType.UP);
+
+                Logger.Success($"{vpn} now active.");
             }
             else if (flag.Value is DownFlag)
             {
+                Logger.Info($"Trying down {vpn}.");
+
                 ApiClient.Current.SendVpnAction(vpn, VpnNetActionType.DOWN);
+
+                Logger.Success($"{vpn} now down.");
             }
             else if (flag.Value is InitFlag)
             {
@@ -51,7 +71,11 @@ public class VpnFlagsHandler : IHandler
                     return;
                 }
 
+                Logger.Info($"Trying init {vpn}.");
+
                 ApiClient.Current.SendVpnAction(vpn, VpnNetActionType.INIT);
+
+                Logger.Success($"{vpn} successful initialized.");
             }
             else if (flag.Value is LogsFlag)
             {

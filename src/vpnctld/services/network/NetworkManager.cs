@@ -34,7 +34,7 @@ public class NetworkManager : INetworkManager
             }
         }
 
-        Logger.Info($"Current network interface is \"{interfaceName}\"");
+        //Logger.Info($"Current network interface is \"{interfaceName}\"");
         return interfaceName;
     }
 

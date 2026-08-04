@@ -9,9 +9,9 @@ public class JsonDataProvider : IDataProvider
         TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver()
     };
 
-    private JsonState<ServerData>? _server;
-    private JsonState<ClientsData>? _clients;
-    private JsonState<List<AuthToken>>? _tokens;
+    private JsonStorage<ServerData>? _server;
+    private JsonStorage<ClientsData>? _clients;
+    private JsonStorage<List<AuthToken>>? _tokens;
 
     public ServerData GetServerState()
     {

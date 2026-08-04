@@ -141,20 +141,32 @@ public class FlagsHandler : IHandler
 
         while (view.KeepRunning())
         {
+            var table = new ConsoleTable()
+            {
+                Width = 95
+            };
+
+            table.AddBorder();
+
+            table.AddHeaders(
+                new() { Name = "NAME", Spacing = 12 },
+                new() { Name = "INSTALL STATUS", Spacing = 16 },
+                new() { Name = "ENGINE STATE", Spacing = 14 },
+                new() { Name = "PORT", Spacing = 15 },
+                new() { Name = "CLIENTS", Spacing = 15 },
+                new() { Name = "TRAFFIC (DN/UP)", Spacing = 10 }
+            );
+
+            table.AddSeparator();
+
             var api = ApiClient.Current;
 
             var vpns = api.GetVpns();
-            var monitor = api.GetSystemMonitor();
-            var info = api.GetServerInfo();
 
             int totalActiveClients = 0;
             int totalClients = 0;
             long globalBytesReceived = 0;
             long globalBytesSent = 0;
-
-            view.WriteLine("===============================================================================================");
-            view.WriteLine($"  {"NAME",-12} {"INSTALL STATUS",-16} {"ENGINE STATE",-14} {"PORT",-15} {"CLIENTS",-12} {"TRAFFIC (DN/UP)"}");
-            view.WriteLine("  ---------------------------------------------------------------------------------------------");
 
             foreach (var vpn in vpns.Vpns)
             {
@@ -200,23 +212,33 @@ public class FlagsHandler : IHandler
                     }
                 }
 
-                view.WriteLine($"  {name,-12} {installText,-16} {activeText,-14} {portText,-15} {clientsCountText,-12} {trafficFormat}");
+                table.AddRow(name, installText, activeText, portText, clientsCountText, trafficFormat);
             }
 
-            view.WriteLine("===============================================================================================");
+            table.AddBorder();
+
+            var info = api.GetServerInfo();
+            var monitor = api.GetSystemMonitor();
 
             var globalTraffic = FormatManager.FormatTraffic(globalBytesReceived, globalBytesSent);
 
-            view.WriteLine($"  Total Registered Clients: {totalClients} | Total Active Connections: {totalActiveClients}");
-            view.WriteLine($"  Total Server Traffic: Download: {globalTraffic.down} | Upload: {globalTraffic.up}");
-            view.WriteLine($"  SERVER: IP: {info.Response.Ip} | Interface: {info.Response.NetworkInterface} | Hostname: {info.Response.Hostname} | Latency: {info.LatencyMs:0}ms");
-            view.WriteLine($"  SYSTEM: OS: {info.Response.Os} | Arch: {info.Response.Arch} | UTC: {info.Response.UtcTime:yyyy-MM-dd HH:mm:ss}");
-            view.WriteLine("  ---------------------------------------------------------------------------------------------");
+            table.AddText($"Total Registered Clients: {totalClients} | Total Active Connections: {totalActiveClients}");
+            table.AddText($"Total Server Traffic: Download: {globalTraffic.down} | Upload: {globalTraffic.up}");
+            table.AddText($"SERVER: IP: {info.Response.Ip} | Interface: {info.Response.NetworkInterface} | Hostname: {info.Response.Hostname} | Latency: {info.LatencyMs:0}ms");
+            table.AddText($"SYSTEM: OS: {info.Response.Os} | Arch: {info.Response.Arch} | UTC: {info.Response.UtcTime:yyyy-MM-dd HH:mm:ss}");
 
-            view.WriteLine($"  MONITOR: CPU: {monitor.CpuUsage}% | Load: {monitor.LoadAverage:0.00} | RAM: {monitor.UsageMemory} / {monitor.TotalMemory} MB | Uptime: {FormatManager.GetUptime(monitor.Uptime)}");
-            view.WriteLine("===============================================================================================");
+            table.AddSeparator();
 
-            view.Wait(TimeSpan.FromSeconds(2));
+            table.AddText($"MONITOR: CPU: {monitor.CpuUsage}% | Load: {monitor.LoadAverage:0.00} | RAM: {monitor.UsageMemory} / {monitor.TotalMemory} MB | Uptime: {FormatManager.GetUptime(monitor.Uptime)}");
+
+            table.AddBorder();
+
+            foreach (var line in table.Build())
+            {
+                view.WriteLine(line);
+            }
+
+            view.Wait();
         }
     }
 

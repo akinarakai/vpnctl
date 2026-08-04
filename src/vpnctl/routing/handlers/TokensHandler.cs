@@ -71,7 +71,7 @@ public class TokensHandler : IHandler
             }
 
             ApiClient.Current.DeleteToken(name);
-            
+
             Logger.Info($"Token {name} was deleted.");
         }
         else if (action == "list")
@@ -83,34 +83,44 @@ public class TokensHandler : IHandler
 
     private void PrintList(List<AuthTokenNetData> tokens, bool isWatch)
     {
-        ConsoleLiveView view;
-        if (isWatch)
-        {
-            view = new ConsoleLiveView();
-        }
-        else
-        {
-            view = new ConsoleLiveView(1);
-        }
+        var view = isWatch ? new ConsoleLiveView() : new ConsoleLiveView(1);
 
         view.Start();
 
         while (view.KeepRunning())
         {
-            view.WriteLine("================================================================================");
-            view.WriteLine($"{"NAME",-16} {"LEVEL",-12} {"CREATED",-20} {"LAST USED",-15}");
-            view.WriteLine("--------------------------------------------------------------------------------");
+            var table = new ConsoleTable();
+
+            table.AddBorder();
+
+            table.AddHeaders(
+                new() { Name = "NAME", Spacing = 16 },
+                new() { Name = "LEVEL", Spacing = 12 },
+                new() { Name = "CREATED", Spacing = 20 },
+                new() { Name = "LAST USED", Spacing = 15 }
+            );
+
+            table.AddSeparator();
 
             foreach (var token in tokens.OrderByDescending(x => x.Level))
             {
-                var created = token.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
-
+                var created = token.CreatedAt.ToString("yyyy-MM-dd HH:mm");
                 var lastUsed = token.LastUsedAt.HasValue ? FormatManager.GetRelativeTime(token.LastUsedAt.Value) : "Never";
 
-                view.WriteLine($"{token.Name,-16} {token.Level,-12} {created,-20} {lastUsed,-15}");
+                table.AddRow(
+                    token.Name,
+                    token.Level.ToString(),
+                    created,
+                    lastUsed
+                );
             }
 
-            view.WriteLine("================================================================================");
+            table.AddBorder();
+
+            foreach (var line in table.Build())
+            {
+                view.WriteLine(line);
+            }
 
             view.Wait();
         }

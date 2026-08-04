@@ -1,20 +1,4 @@
-var builder = WebApplication.CreateBuilder(args);
-
-builder.Logging.ClearProviders();
-
-var app = builder.Build();
-
-Kernel.Register<ICommandRunner>(() => new LinuxCommandRunner());
-Kernel.Register<IFileManager>(() => new BaseFileManager());
-Kernel.Register<IDataProvider>(() => new JsonDataProvider());
-Kernel.Register<IFirewallManager>(() => new UfwFirewallManager());
-Kernel.Register<INetworkManager>(() => new NetworkManager());
-Kernel.Register<ISystemConfigurator>(() => new SystemConfigurator());
-Kernel.Register<ISystemMonitor>(() => new BaseSystemMonitor());
-
-VpnManager.Register(() => new WireGuard());
-VpnManager.Register(() => new AmneziaWg());
-VpnManager.Register(() => new Xray());
+var app = new AppBootstrapper().Build(args);
 
 app.Use(async (context, next) =>
 {
@@ -53,15 +37,7 @@ app.Use(async (context, next) =>
     {
         await ApiResult.Error(context, ex.ToString());
     }
-    finally
-    {
-        if (Kernel.IsCreated<IDataProvider>())
-        {
-            Kernel.Get<IDataProvider>().TrySave();
-        }
-    }
 });
-
 
 // GET
 app.MapGet(ApiRoutes.Server.Info, HandleServerInfo);
@@ -119,6 +95,7 @@ IResult HandleTokenActions(AuthTokenActionRequest request)
             return ApiResult.Bad("Access level required for add.");
 
         data.AddToken(request.Name, request.AccessLevel.Value, out var secret);
+        data.TrySave();
 
         return ApiResult.Ok(new AuthTokenResponse
         {
@@ -131,6 +108,7 @@ IResult HandleTokenActions(AuthTokenActionRequest request)
             return ApiResult.NotFound($"Token with name '{request.Name}' not found.");
 
         data.RemoveToken(request.Name);
+        data.TrySave();
 
         return ApiResult.Ok();
     }
@@ -254,6 +232,8 @@ IResult HandleVpnList(VpnServiceType? type)
 
 IResult HandleProtocolAction(ProtocolActionRequest request)
 {
+    var data = Kernel.Get<IDataProvider>();
+    
     var proto = request.Type;
     var value = request.Value;
     var action = request.Action;
@@ -295,7 +275,7 @@ IResult HandleProtocolAction(ProtocolActionRequest request)
     else if (proto == ProtocolType.VLESS)
     {
         var xray = VpnManager.Xray;
-        var data = Kernel.Get<IDataProvider>().GetServerState().Xray;
+        var xrayData = Kernel.Get<IDataProvider>().GetServerState().Xray;
 
         if (action == ProtocolNetActionType.GEN_KEYS)
         {
@@ -310,14 +290,14 @@ IResult HandleProtocolAction(ProtocolActionRequest request)
             if (string.IsNullOrEmpty(value))
                 return ApiResult.Bad($"Fingerprint cant be empty.");
 
-            data.Vless.Fingerprint = value;
+            xrayData.Vless.Fingerprint = value;
         }
         else if (action == ProtocolNetActionType.SET_SNI)
         {
             if (string.IsNullOrEmpty(value))
                 return ApiResult.Bad($"Sni cant be empty.");
 
-            data.Vless.Sni = value;
+            xrayData.Vless.Sni = value;
         }
         else if (action == ProtocolNetActionType.SET_SECURITY)
         {
@@ -329,7 +309,7 @@ IResult HandleProtocolAction(ProtocolActionRequest request)
                 return ApiResult.Bad($"Unsupported security type {value}.");
             }
 
-            data.Vless.Security = value;
+            xrayData.Vless.Security = value;
         }
         else
         {
@@ -340,6 +320,8 @@ IResult HandleProtocolAction(ProtocolActionRequest request)
     {
         return ApiResult.Bad($"{proto.ToString()} not supported.");
     }
+
+    data.TrySave();
 
     return ApiResult.Ok();
 }
@@ -534,6 +516,8 @@ IResult HandleClientAction(ClientActionRequest request)
             break;
     }
 
+    data.TrySave();
+
     return ApiResult.Ok(response);
 }
 
@@ -620,6 +604,8 @@ IResult HandleVpnAction(VpnActionRequest request)
         return ApiResult.Bad("Unsupported VPN type");
     }
 
+    var data = Kernel.Get<IDataProvider>();
+
     switch (request.Action)
     {
         case VpnNetActionType.INSTALL:
@@ -691,6 +677,8 @@ IResult HandleVpnAction(VpnActionRequest request)
         default:
             return ApiResult.Bad("Unsupported action");
     }
+
+    data.TrySave();
 
     return ApiResult.Ok();
 }

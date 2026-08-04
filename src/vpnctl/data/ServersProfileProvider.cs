@@ -2,68 +2,42 @@ using System.Text.Json;
 
 public class ServersProfileProvider : IServersProfileProvider
 {
-    private readonly string _path = Path.Combine(PathRegistry.VpnctlDir, "servers.json");
-
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
         WriteIndented = true
     };
 
-    private ProfileStorage? _cached;
-
-    private string _initialHash = string.Empty;
+    private JsonStorage<ProfileStorage>? _storage;
 
     public ProfileStorage GetStorage()
     {
-        if (_cached != null)
-            return _cached;
-
-        try
+        if (_storage == null)
         {
-            var file = Kernel.Get<IFileManager>();
+            var directory = string.Empty;
 
-            if (file.Exists(_path))
+            if (OperatingSystem.IsLinux())
             {
-                file.TryRead(_path,  out var json);
-
-                _cached = JsonSerializer.Deserialize<ProfileStorage>(json, _jsonOptions) ?? new ProfileStorage();
-                _initialHash = file.CalculateHash(json);
+                directory = "/etc/vpnctl";
+            }
+            else if (OperatingSystem.IsWindows())
+            {
+                directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "vpnctl");
             }
             else
             {
-                _cached = new ProfileStorage();
-                _initialHash = string.Empty;
+                throw new PlatformNotSupportedException();
             }
 
-            return _cached;
+            var path = Path.Combine(directory, "servers.json");
+            _storage = new(path, Kernel.Get<IFileManager>(), _jsonOptions);
         }
-        catch (Exception ex)
-        {
-            throw new Exception($"Failed to get servers.json: {ex.Message}");
-        }
+
+        return _storage.Get();
     }
 
     public void TrySave()
     {
-        try
-        {
-            if (_cached == null)
-                return;
-
-            var file = Kernel.Get<IFileManager>();
-
-            var json = JsonSerializer.Serialize(_cached, _jsonOptions);
-            var currentHash = file.CalculateHash(json);
-            if (currentHash == _initialHash) return;
-
-            file.TrySave(_path, json);
-
-            _initialHash = currentHash;
-        }
-        catch (Exception ex)
-        {
-            throw new Exception($"Failed to save servers.json: {ex.Message}");
-        }
+        _storage?.Save();
     }
 
     public void Add(ServerProfile profile)

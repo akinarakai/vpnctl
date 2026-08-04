@@ -181,9 +181,23 @@ public class ServersProfileHandler : IHandler
 
         while (view.KeepRunning())
         {
-            view.WriteLine("==============================================================================================");
-            view.WriteLine($"  {"NAME",-15} {"STATUS",-10} {"ENDPOINT",-20} {"LATENCY",-8} {"UPTIME",-15} {"HOSTNAME",-15}");
-            view.WriteLine("----------------------------------------------------------------------------------------------");
+            var table = new ConsoleTable() 
+            {
+                Width = 85
+            };
+
+            table.AddBorder();
+
+            table.AddHeaders(
+                new() { Name = "NAME", Spacing = 20 },
+                new() { Name = "STATUS", Spacing = 10 },
+                new() { Name = "ENDPOINT", Spacing = 20 },
+                new() { Name = "LATENCY", Spacing = 8 },
+                new() { Name = "UPTIME", Spacing = 8 },
+                new() { Name = "HOSTNAME", Spacing = 15 }
+            );
+
+            table.AddSeparator();
 
             foreach (var profile in storage.Profiles)
             {
@@ -194,7 +208,7 @@ public class ServersProfileHandler : IHandler
                     var client = ApiClient.Create(profile);
                     var isOnline = client.TryGetServerInfo(out var info);
 
-                    var name = $"{(isCurrent ? "*" : " ")} {profile.Name}";
+                    var name = $"{profile.Name} {(isCurrent ? "✓" : " ")}";
 
                     var status = isOnline ? "● ONLINE" : "○ OFFLINE";
 
@@ -205,15 +219,20 @@ public class ServersProfileHandler : IHandler
                     var hostname = isOnline && info != null ? info.Response.Hostname : "-";
                     var endpoint = $"{profile.Address}:{profile.Port}";
 
-                    view.WriteLine($"  {name,-15} {status,-10} {endpoint,-20} {latency,-8} {uptime,-15} {hostname,-15}");
+                    table.AddRow(name, status, endpoint, latency, uptime, hostname);
                 }
                 catch (Exception ex)
                 {
-                    view.WriteLine($"Server error '{profile.Name}': {ex.Message}");
+                    table.AddText($"Server error '{profile.Name}': {ex.Message}");
                 }
             }
 
-            view.WriteLine("==============================================================================================");
+            table.AddBorder();
+
+            foreach (var line in table.Build())
+            {
+                view.WriteLine(line);
+            }
 
             view.Wait();
         }
@@ -238,24 +257,34 @@ public class ServersProfileHandler : IHandler
 
         while (view.KeepRunning())
         {
-            view.WriteLine("================================================================================");
-            view.WriteLine($" SERVER: {profile.Name}");
-            view.WriteLine("--------------------------------------------------------------------------------");
-            view.WriteLine($" ENDPOINT: {profile.Address}:{profile.Port}");
-            view.WriteLine($" STATUS:   {(isOnline ? "● ONLINE" : "○ OFFLINE")}");
-            view.WriteLine($" TOKEN:    {(string.IsNullOrEmpty(profile.Token) ? "NOT SET" : "CONFIGURED")}");
+            var table = new ConsoleTable();
+
+            table.AddBorder();
+
+            table.AddText($"SERVER: {profile.Name}");
+
+            table.AddSeparator();
+
+            table.AddText($"ENDPOINT: {profile.Address}:{profile.Port}");
+            table.AddText($"STATUS:   {(isOnline ? "● ONLINE" : "○ OFFLINE")}");
+            table.AddText($"TOKEN:    {(string.IsNullOrEmpty(profile.Token) ? "NOT SET" : "CONFIGURED")}");
 
             if (isOnline)
             {
-                view.WriteLine($" LATENCY:  {info!.LatencyMs}ms");
-                view.WriteLine($" HOSTNAME: {info.Response.Hostname}");
-                view.WriteLine($" OS:       {info.Response.Os}");
-                view.WriteLine($" ARCH:     {info.Response.Arch}");
-                view.WriteLine($" UPTIME:   {FormatManager.GetUptime(info.Response.Uptime)}");
-                view.WriteLine($" UTC:      {info.Response.UtcTime:yyyy-MM-dd HH:mm:ss}");
+                table.AddText($"LATENCY:  {info!.LatencyMs}ms");
+                table.AddText($"HOSTNAME: {info.Response.Hostname}");
+                table.AddText($"OS:       {info.Response.Os}");
+                table.AddText($"ARCH:     {info.Response.Arch}");
+                table.AddText($"UPTIME:   {FormatManager.GetUptime(info.Response.Uptime)}");
+                table.AddText($"UTC:      {info.Response.UtcTime:yyyy-MM-dd HH:mm:ss}");
             }
 
-            view.WriteLine("================================================================================");
+            table.AddBorder();
+
+            foreach (var line in table.Build())
+            {
+                view.WriteLine(line);
+            }
 
             view.Wait();
         }
