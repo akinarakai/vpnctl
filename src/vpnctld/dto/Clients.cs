@@ -13,17 +13,17 @@ public abstract class VpnClientBase
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 
-    public ClientNetData ToNet(ProtocolType proto, ClientOnlineStats? stats = null)
+    public ClientNetData ToNet(ProtocolType proto, bool showConfig, ClientOnlineStats? stats = null)
     {
         return new ClientNetData
         {
             Protocol = proto,
             Id = Id,
             Name = Name,
-            ConfigStr = ConfigStr,
             IsActive = IsActive,
             CreatedAt = CreatedAt,
-            Stats = stats,
+            ConfigStr = showConfig ? ConfigStr : null,
+            Stats = stats?.ToNet(),
         };
     }
 }

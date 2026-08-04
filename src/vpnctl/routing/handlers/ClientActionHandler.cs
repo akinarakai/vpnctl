@@ -93,11 +93,15 @@ public class ClientActionHandler : IHandler
         };
 
         var client = ApiClient.Current.SendClientAction(request);
-        if (client != null)
+        if (client != null && !string.IsNullOrEmpty(client.ConfigStr))
         {
             Logger.Text($"--- CONFIG FOR {client.Name} ---");
             QRCode.Render(client.ConfigStr);
             Logger.Text("-------------------------------------");
+        }
+        else if (string.IsNullOrEmpty(client?.ConfigStr))
+        {
+            Logger.Warn($"Failed get config. Access forbiden");
         }
         else
         {

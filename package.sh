@@ -2,12 +2,21 @@
 
 set -e
 
+RUNTIME=${1:-linux-x64}
+
 echo "Building project..."
-./build.sh
+./build.sh $RUNTIME
 
 echo "Preparing package..."
 
-rm -rf package
-mkdir package
+mkdir -p package
 
-echo "Package ready!"
+echo "Creating archive..."
+
+cd package
+
+zip -r $RUNTIME.zip ../release/$RUNTIME
+
+cd ..
+
+echo "Package ready: package/$RUNTIME.zip"

@@ -42,19 +42,23 @@ public class ClientsShowHandler : IHandler
 
         if (isSingle)
         {
-            PrintConfig(response.Clients[0], displayMode);
+            Console.WriteLine("=============================================================================");
+
+            PrintConfig(response.Clients[0], displayMode, false);
         }
         else
         {
+            Console.WriteLine("=============================================================================");
+
             for (int i = 0; i < response.Clients.Count; i++)
             {
                 var client = response.Clients[i];
-                PrintConfig(client, displayMode, i + 1);
+                PrintConfig(client, displayMode, i != response.Clients.Count - 1, i + 1);
             }
         }
     }
 
-    private void PrintConfig(ClientNetData client, ConfigDisplayMode displayMode, int? iter = null)
+    private void PrintConfig(ClientNetData client, ConfigDisplayMode displayMode, bool useSeparator, int? iter = null)
     {
         var providerStr = FormatManager.GetProtocolNameFromType(client.Protocol);
         var activeStr = client.IsActive ? "● ENABLED" : "○ BLOCKED";
@@ -93,9 +97,13 @@ public class ClientsShowHandler : IHandler
             Console.WriteLine("  -> Statistics: No data available");
         }
 
-        if (displayMode != ConfigDisplayMode.None && !string.IsNullOrEmpty(client.ConfigStr))
+        if (displayMode != ConfigDisplayMode.None)
         {
-            if (displayMode == ConfigDisplayMode.Qr)
+            if (string.IsNullOrEmpty(client.ConfigStr))
+            {
+                Logger.Warn("Failed to get configuration. Access forbidden.");
+            }
+            else if (displayMode == ConfigDisplayMode.Qr)
             {
                 Console.WriteLine("  -- QR CODE --");
                 QRCode.Render(client.ConfigStr);
@@ -107,7 +115,14 @@ public class ClientsShowHandler : IHandler
             }
         }
 
-        Console.WriteLine("--------------------------------------------------");
-        Console.WriteLine();
+        if (useSeparator)
+        {
+            Console.WriteLine("--------------------------------------------------");
+            Console.WriteLine();
+        }
+        else
+        {
+            Console.WriteLine("=============================================================================");
+        }
     }
 }

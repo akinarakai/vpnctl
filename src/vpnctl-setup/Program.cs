@@ -44,6 +44,8 @@ static class Program
 
     static void Install()
     {
+        Uninstall();
+
         Console.WriteLine("Starting vpnctl installation...");
         Console.WriteLine($"[INFO] Source directory: {CurrentDir}");
 

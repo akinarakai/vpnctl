@@ -67,8 +67,11 @@ Logger.Info($"vpntld started with {data.GetTokens().Count} tokens.");
 
 app.Run($"http://{data.GetServerState().ListenAddress}:{data.GetServerState().ListenPort}");
 
-IResult HandleTokenList()
+IResult HandleTokenList(HttpContext context)
 {
+    if (!context.HasAccess(AccessLevel.ADMIN))
+        return ApiResult.Forbid(context);
+
     var tokens = Kernel.Get<IDataProvider>().GetTokens();
 
     return ApiResult.Ok(new AuthTokenListResponse
@@ -77,8 +80,11 @@ IResult HandleTokenList()
     });
 }
 
-IResult HandleTokenActions(AuthTokenActionRequest request)
+IResult HandleTokenActions(HttpContext context, AuthTokenActionRequest request)
 {
+    if (!context.HasAccess(AccessLevel.ADMIN))
+        return ApiResult.Forbid(context);
+
     var data = Kernel.Get<IDataProvider>();
 
     var existing = data.GetToken(request.Name);
@@ -230,10 +236,13 @@ IResult HandleVpnList(VpnServiceType? type)
     return ApiResult.Ok(response);
 }
 
-IResult HandleProtocolAction(ProtocolActionRequest request)
+IResult HandleProtocolAction(HttpContext context, ProtocolActionRequest request)
 {
+    if (!context.HasAccess(AccessLevel.ADMIN))
+        return ApiResult.Forbid(context);
+
     var data = Kernel.Get<IDataProvider>();
-    
+
     var proto = request.Type;
     var value = request.Value;
     var action = request.Action;
@@ -326,8 +335,11 @@ IResult HandleProtocolAction(ProtocolActionRequest request)
     return ApiResult.Ok();
 }
 
-IResult HandleClients(string? name)
+IResult HandleClients(HttpContext context, string? name)
 {
+    if (!context.HasAccess(AccessLevel.MODERATOR))
+        return ApiResult.Forbid(context);
+
     var data = Kernel.Get<IDataProvider>();
 
     var clients = data.GetClientsState();
@@ -350,6 +362,7 @@ IResult HandleClients(string? name)
         response.Clients.Add(
             client.ToNet(
                 ClientHelper.GetProtocolFromClientType(client),
+                context.HasAccess(AccessLevel.ADMIN),
                 ClientHelper.GetOnlineStatsForClient(client)
             ));
     }
@@ -362,6 +375,7 @@ IResult HandleClients(string? name)
             response.Clients.Add(
             client.ToNet(
                 ClientHelper.GetProtocolFromClientType(client),
+                context.HasAccess(AccessLevel.ADMIN),
                 ClientHelper.GetOnlineStatsForClient(client, onlineStats)
             ));
         }
@@ -370,8 +384,11 @@ IResult HandleClients(string? name)
     return ApiResult.Ok(response);
 }
 
-IResult HandleClientAction(ClientActionRequest request)
+IResult HandleClientAction(HttpContext context, ClientActionRequest request)
 {
+    if (!context.HasAccess(AccessLevel.MODERATOR))
+        return ApiResult.Forbid(context);
+
     var response = new ClientNetData();
 
     var data = Kernel.Get<IDataProvider>();
@@ -380,6 +397,9 @@ IResult HandleClientAction(ClientActionRequest request)
     switch (request.Action)
     {
         case ClientNetActionType.ADD:
+            if (!context.HasAccess(AccessLevel.ADMIN))
+                return ApiResult.Forbid(context);
+
             if (request.Protocol == null)
                 return ApiResult.Bad("Protocol required for add");
 
@@ -437,11 +457,14 @@ IResult HandleClientAction(ClientActionRequest request)
                 clientsState.Clients.Add(client);
                 vpn?.Restart();
 
-                response = client.ToNet(request.Protocol.Value);
+                response = client.ToNet(request.Protocol.Value, true);
             }
 
             break;
         case ClientNetActionType.DEL:
+            if (!context.HasAccess(AccessLevel.ADMIN))
+                return ApiResult.Forbid(context);
+
             if (string.IsNullOrEmpty(request.Name))
                 return ApiResult.Bad("Name required for del");
 
@@ -539,8 +562,11 @@ IResult HandleVpnLogs(int lines)
     return ApiResult.Ok(response);
 }
 
-IResult HandlePurge()
+IResult HandlePurge(HttpContext context)
 {
+    if (!context.HasAccess(AccessLevel.ADMIN))
+        return ApiResult.Forbid(context);
+
     var vpns = VpnManager.GetAll();
     foreach (var vpn in vpns)
     {
@@ -596,8 +622,11 @@ IResult HandlePurge()
     return ApiResult.Ok();
 }
 
-IResult HandleVpnAction(VpnActionRequest request)
+IResult HandleVpnAction(HttpContext context, VpnActionRequest request)
 {
+    if (!context.HasAccess(AccessLevel.MODERATOR))
+        return ApiResult.Forbid(context);
+
     var vpn = VpnManager.Get(request.Type);
     if (vpn == null)
     {
@@ -609,6 +638,9 @@ IResult HandleVpnAction(VpnActionRequest request)
     switch (request.Action)
     {
         case VpnNetActionType.INSTALL:
+            if (!context.HasAccess(AccessLevel.ADMIN))
+                return ApiResult.Forbid(context);
+
             if (vpn.GetInstallStatus() == VpnInstallStatus.INSTALLED)
             {
                 return ApiResult.Bad("VPN already installed");
@@ -619,6 +651,9 @@ IResult HandleVpnAction(VpnActionRequest request)
             break;
 
         case VpnNetActionType.UNINSTALL:
+            if (!context.HasAccess(AccessLevel.ADMIN))
+                return ApiResult.Forbid(context);
+
             if (vpn.GetInstallStatus() == VpnInstallStatus.NOT_INSTALLED)
             {
                 return ApiResult.Bad("VPN already uninstalled");
@@ -637,6 +672,9 @@ IResult HandleVpnAction(VpnActionRequest request)
             break;
 
         case VpnNetActionType.INIT:
+            if (!context.HasAccess(AccessLevel.ADMIN))
+                return ApiResult.Forbid(context);
+
             if (vpn.GetInstallStatus() == VpnInstallStatus.NOT_INSTALLED)
             {
                 return ApiResult.Bad("VPN uninstalled");
@@ -661,6 +699,9 @@ IResult HandleVpnAction(VpnActionRequest request)
             break;
 
         case VpnNetActionType.DOWN:
+            if (!context.HasAccess(AccessLevel.ADMIN))
+                return ApiResult.Forbid(context);
+
             if (vpn.GetInstallStatus() == VpnInstallStatus.NOT_INSTALLED)
             {
                 return ApiResult.Bad("VPN uninstalled");

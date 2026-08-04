@@ -11,4 +11,11 @@ public static class HttpContextExtensions
     {
         return context.Items[AuthTokenKey] as AuthToken;
     }
+
+    public static bool HasAccess(this HttpContext context, AccessLevel level)
+    {
+        var auth = context.GetAuthToken();
+
+        return auth != null && auth.Level >= level;
+    }
 }

@@ -9,7 +9,17 @@ public class StorageBackgroundService : BackgroundService
                 Kernel.Get<IDataProvider>().TrySave();
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+            await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
         }
+    }
+
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        if (Kernel.IsCreated<IDataProvider>())
+        {
+            Kernel.Get<IDataProvider>().TrySave();
+        }
+
+        await base.StopAsync(cancellationToken);
     }
 }

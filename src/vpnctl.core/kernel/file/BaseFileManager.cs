@@ -19,7 +19,7 @@ public class BaseFileManager : IFileManager
 
             var bytesBefore = Exists(path) ? GetFile(path).Length : 0;
 
-            File.WriteAllText(path, content, Encoding.UTF8);
+            File.WriteAllText(path, content, new UTF8Encoding(false));
 
             var bytesAfter = GetFile(path).Length;
 

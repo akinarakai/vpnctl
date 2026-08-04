@@ -23,6 +23,17 @@ public static class ApiResult
         });
     }
 
+    public static IResult Forbid(HttpContext context)
+    {
+        Logger.Warn($"Forbidden: {context.Connection.RemoteIpAddress}");
+
+        return Results.Json(new ApiResponse<object>
+        {
+            Error = "Forbidden"
+        },
+        statusCode: StatusCodes.Status403Forbidden);
+    }
+
     public static IResult NotFound(string error)
     {
         Logger.Warn($"Not Found: {error}");

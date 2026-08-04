@@ -224,6 +224,9 @@ public class FlagsHandler : IHandler
 
             table.AddText($"Total Registered Clients: {totalClients} | Total Active Connections: {totalActiveClients}");
             table.AddText($"Total Server Traffic: Download: {globalTraffic.down} | Upload: {globalTraffic.up}");
+
+            table.AddSeparator();
+
             table.AddText($"SERVER: IP: {info.Response.Ip} | Interface: {info.Response.NetworkInterface} | Hostname: {info.Response.Hostname} | Latency: {info.LatencyMs:0}ms");
             table.AddText($"SYSTEM: OS: {info.Response.Os} | Arch: {info.Response.Arch} | UTC: {info.Response.UtcTime:yyyy-MM-dd HH:mm:ss}");
 
